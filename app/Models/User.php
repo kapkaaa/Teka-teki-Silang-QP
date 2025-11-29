@@ -11,7 +11,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    public $timestamps = false;  // <— tambahkan ini
+    // public $timestamps = false;  // <— tambahkan ini
 
     protected $fillable = [
         'username',
@@ -26,6 +26,8 @@ class User extends Authenticatable
 
     protected $casts = [
         'password' => 'hashed',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function answers()
