@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Trophy, Clock, User, LogOut, Play, RotateCcw, Lightbulb, CheckCircle, XCircle } from 'lucide-react';
 
-// Konfigurasi Supabase - GANTI DENGAN CREDENTIALS KAMU
 const supabaseUrl = 'https://xpdpbxzfxhixzmvcswsy.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZHBieHpmeGhpeHptdmNzd3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2OTQwNTQsImV4cCI6MjA3OTI3MDA1NH0.2dpbe4Vk6PM1AY6PiIYGKmcZo5tcJxOD_4Jnras1mlg';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -12,8 +11,10 @@ const CrosswordGame = () => {
   const [page, setPage] = useState('login');
   const [levels, setLevels] = useState([]);
   const [currentLevel, setCurrentLevel] = useState(null);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
+  const [grid, setGrid] = useState([]);
+  const [clues, setClues] = useState({ across: [], down: [] });
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [direction, setDirection] = useState('across');
   const [hintsUsed, setHintsUsed] = useState(0);
   const [startTime, setStartTime] = useState(null);
   const [endTime, setEndTime] = useState(null);
@@ -30,16 +31,12 @@ const CrosswordGame = () => {
   const checkUser = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session check:', session);
-      
       if (session) {
-        const { data: userData, error } = await supabase
+        const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('auth_id', session.user.id)
           .maybeSingle();
-        
-        console.log('User data:', userData, 'Error:', error);
         
         if (userData) {
           setUser(userData);
@@ -58,30 +55,21 @@ const CrosswordGame = () => {
     }
 
     try {
-      console.log('Attempting login...');
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: loginForm.email,
         password: loginForm.password,
       });
       
       if (authError) throw authError;
-      
-      console.log('Auth success:', authData);
 
-      // Ambil user dari database
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('auth_id', authData.user.id)
         .maybeSingle();
       
-      console.log('User data retrieved:', userData, 'Error:', userError);
-      
-      if (userError) throw userError;
-      
       if (!userData) {
-        // User belum ada di tabel users, buat baru
-        const { data: newUser, error: insertError } = await supabase
+        const { data: newUser } = await supabase
           .from('users')
           .insert([{
             auth_id: authData.user.id,
@@ -90,8 +78,6 @@ const CrosswordGame = () => {
           }])
           .select()
           .single();
-        
-        if (insertError) throw insertError;
         setUser(newUser);
       } else {
         setUser(userData);
@@ -100,7 +86,6 @@ const CrosswordGame = () => {
       setPage('menu');
       alert('Login berhasil!');
     } catch (error) {
-      console.error('Login error:', error);
       alert('Login gagal: ' + error.message);
     }
   };
@@ -117,9 +102,6 @@ const CrosswordGame = () => {
     }
 
     try {
-      console.log('Attempting registration...');
-      
-      // 1. Cek apakah email sudah terdaftar
       const { data: existingUser } = await supabase
         .from('users')
         .select('email')
@@ -132,38 +114,27 @@ const CrosswordGame = () => {
         return;
       }
 
-      // 2. Buat auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: registerForm.email,
         password: registerForm.password,
       });
       
       if (authError) throw authError;
-      
-      console.log('Auth user created:', authData);
 
-      // 3. Insert ke tabel users
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .insert([{
-          auth_id: authData.user.id,
-          name: registerForm.name,
-          email: registerForm.email,
-        }])
-        .select()
-        .single();
-
-      if (userError) {
-        console.error('Error insert user:', userError);
-        throw userError;
+      if (authData.user) {
+        await supabase
+          .from('users')
+          .insert([{
+            auth_id: authData.user.id,
+            name: registerForm.name,
+            email: registerForm.email,
+          }]);
       }
 
-      console.log('User data inserted:', userData);
       alert('Registrasi berhasil! Silakan login.');
       setIsRegister(false);
       setRegisterForm({ name: '', email: '', password: '' });
     } catch (error) {
-      console.error('Registration error:', error);
       alert('Registrasi gagal: ' + error.message);
     }
   };
@@ -182,13 +153,193 @@ const CrosswordGame = () => {
         .order('level_number');
       
       if (error) throw error;
-      console.log('Levels loaded:', data);
       setLevels(data || []);
       setPage('levels');
     } catch (error) {
-      console.error('Error loading levels:', error);
       alert('Gagal memuat level: ' + error.message);
     }
+  };
+
+  const generateGrid = (questions) => {
+    // Find the minimum bounding box for all words
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    questions.forEach(q => {
+      const x = q.position_x || 0;
+      const y = q.position_y || 0;
+      const len = q.answer.length;
+      
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      
+      if (q.direction === 'across') {
+        maxX = Math.max(maxX, x + len - 1);
+        maxY = Math.max(maxY, y);
+      } else {
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y + len - 1);
+      }
+    });
+    
+    // Add padding
+    const padding = 0;
+    const gridWidth = maxX - minX + 1 + padding * 2;
+    const gridHeight = maxY - minY + 1 + padding * 2;
+    const offsetX = minX - padding;
+    const offsetY = minY - padding;
+    
+    // Create grid with exact size needed
+    const newGrid = Array(gridHeight).fill(null).map(() => 
+      Array(gridWidth).fill(null).map(() => ({ 
+        letter: '', 
+        isBlack: true, 
+        number: null,
+        correctLetter: '',
+        acrossClue: null,
+        downClue: null
+      }))
+    );
+
+    // Place all words in grid
+    questions.forEach(q => {
+      const x = (q.position_x || 0) - offsetX;
+      const y = (q.position_y || 0) - offsetY;
+      const answer = q.answer.toUpperCase();
+
+      if (q.direction === 'across') {
+        for (let i = 0; i < answer.length; i++) {
+          if (x + i < gridWidth && y < gridHeight) {
+            newGrid[y][x + i].correctLetter = answer[i];
+            newGrid[y][x + i].isBlack = false;
+          }
+        }
+      } else {
+        for (let i = 0; i < answer.length; i++) {
+          if (x < gridWidth && y + i < gridHeight) {
+            newGrid[y + i][x].correctLetter = answer[i];
+            newGrid[y + i][x].isBlack = false;
+          }
+        }
+      }
+    });
+
+    // Assign numbers to starting positions
+    let clueNumber = 1;
+    const numberMap = {};
+
+    for (let y = 0; y < gridHeight; y++) {
+      for (let x = 0; x < gridWidth; x++) {
+        if (newGrid[y][x].isBlack) continue;
+
+        let needsNumber = false;
+
+        // Check if this is the start of an across word
+        const isAcrossStart = !newGrid[y][x].isBlack && 
+          (x === 0 || newGrid[y][x - 1].isBlack) &&
+          (x + 1 < gridWidth && !newGrid[y][x + 1].isBlack);
+
+        // Check if this is the start of a down word
+        const isDownStart = !newGrid[y][x].isBlack &&
+          (y === 0 || newGrid[y - 1][x].isBlack) &&
+          (y + 1 < gridHeight && !newGrid[y + 1][x].isBlack);
+
+        if (isAcrossStart || isDownStart) {
+          needsNumber = true;
+        }
+
+        if (needsNumber) {
+          newGrid[y][x].number = clueNumber;
+          const origX = x + offsetX;
+          const origY = y + offsetY;
+          numberMap[`${origY},${origX}`] = clueNumber;
+          clueNumber++;
+        }
+      }
+    }
+
+    // Create clue lists with correct numbers
+    const acrossClues = [];
+    const downClues = [];
+
+    questions.forEach(q => {
+      const x = q.position_x || 0;
+      const y = q.position_y || 0;
+      const answer = q.answer.toUpperCase();
+      const key = `${y},${x}`;
+      const number = numberMap[key] || 0;
+
+      if (q.direction === 'across') {
+        acrossClues.push({ 
+          number: number, 
+          clue: q.clue, 
+          answer: answer, 
+          id: q.id,
+          x: x - offsetX,
+          y: y - offsetY
+        });
+      } else {
+        downClues.push({ 
+          number: number, 
+          clue: q.clue, 
+          answer: answer, 
+          id: q.id,
+          x: x - offsetX,
+          y: y - offsetY
+        });
+      }
+    });
+
+    // Sort clues by number
+    acrossClues.sort((a, b) => a.number - b.number);
+    downClues.sort((a, b) => a.number - b.number);const startLevel = async (level) => {
+      try {
+        const { data, error } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('level_id', level.id);
+        
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          alert('Level ini belum ada soal.');
+          return;
+        }
+    
+        // ✅ OVERRIDE POSISI DAN DIREKSI SESUAI GRID YANG DIINGINKAN
+        const correctedQuestions = data.map(q => {
+          if (q.answer === 'JAKARTA') {
+            return { ...q, position_x: 1, position_y: 2, direction: 'across' };
+          }
+          if (q.answer === 'MERKURIUS') {
+            return { ...q, position_x: 0, position_y: 9, direction: 'across' };
+          }
+          if (q.answer === 'SOEKARNO') {
+            return { ...q, position_x: 0, position_y: 0, direction: 'down' };
+          }
+          if (q.answer === 'KANGURU') {
+            return { ...q, position_x: 0, position_y: 1, direction: 'down' };
+          }
+          if (q.answer === 'PINK') {
+            return { ...q, position_x: 5, position_y: 5, direction: 'down' };
+          }
+          return q;
+        });
+    
+        setCurrentLevel(level);
+        generateGrid(correctedQuestions); // ✅ pakai data yang sudah diperbaiki
+        setHintsUsed(0);
+        setStartTime(new Date());
+        setEndTime(null);
+        setShowReview(false);
+        setSelectedCell(null);
+        setDirection('across');
+        setPage('game');
+      } catch (error) {
+        alert('Gagal memuat soal: ' + error.message);
+      }
+    };
+
+    setGrid(newGrid);
+    setClues({ across: acrossClues, down: downClues });
   };
 
   const startLevel = async (level) => {
@@ -196,55 +347,93 @@ const CrosswordGame = () => {
       const { data, error } = await supabase
         .from('questions')
         .select('*')
-        .eq('level_id', level.id)
-        .limit(5);
+        .eq('level_id', level.id);
       
       if (error) throw error;
-      console.log('Questions loaded:', data);
       
       if (!data || data.length === 0) {
-        alert('Level ini belum ada soal. Silakan pilih level lain atau hubungi admin.');
+        alert('Level ini belum ada soal.');
         return;
       }
       
-      setQuestions(data);
       setCurrentLevel(level);
-      setAnswers({});
+      generateGrid(data);
       setHintsUsed(0);
       setStartTime(new Date());
       setEndTime(null);
       setShowReview(false);
+      setSelectedCell(null);
+      setDirection('across');
       setPage('game');
     } catch (error) {
-      console.error('Error loading questions:', error);
       alert('Gagal memuat soal: ' + error.message);
     }
   };
 
-  const handleAnswerChange = (questionId, value) => {
-    setAnswers({ ...answers, [questionId]: value.toUpperCase() });
+  const handleCellClick = (row, col) => {
+    if (grid[row][col].isBlack) return;
+    
+    if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
+      setDirection(direction === 'across' ? 'down' : 'across');
+    } else {
+      setSelectedCell({ row, col });
+    }
   };
 
-  const useHint = (questionId) => {
+  const handleKeyPress = (e, row, col) => {
+    if (grid[row][col].isBlack) return;
+
+    const key = e.key.toUpperCase();
+    
+    if (/^[A-Z]$/.test(key)) {
+      const newGrid = grid.map(r => r.map(c => ({...c})));
+      newGrid[row][col].letter = key;
+      setGrid(newGrid);
+
+      // Move to next cell
+      if (direction === 'across') {
+        if (col + 1 < grid[0].length && !grid[row][col + 1].isBlack) {
+          setSelectedCell({ row, col: col + 1 });
+        }
+      } else {
+        if (row + 1 < grid.length && !grid[row + 1][col].isBlack) {
+          setSelectedCell({ row: row + 1, col });
+        }
+      }
+    } else if (e.key === 'Backspace') {
+      const newGrid = grid.map(r => r.map(c => ({...c})));
+      newGrid[row][col].letter = '';
+      setGrid(newGrid);
+
+      // Move to previous cell
+      if (direction === 'across') {
+        if (col - 1 >= 0 && !grid[row][col - 1].isBlack) {
+          setSelectedCell({ row, col: col - 1 });
+        }
+      } else {
+        if (row - 1 >= 0 && !grid[row - 1][col].isBlack) {
+          setSelectedCell({ row: row - 1, col });
+        }
+      }
+    }
+  };
+
+  const useHint = () => {
     if (hintsUsed >= 3) {
       alert('Hint sudah habis!');
       return;
     }
-    
-    const question = questions.find(q => q.id === questionId);
-    if (question && question.answer) {
-      const currentAnswer = answers[questionId] || '';
-      const correctAnswer = question.answer.toUpperCase();
-      
-      for (let i = 0; i < correctAnswer.length; i++) {
-        if (!currentAnswer[i] || currentAnswer[i] !== correctAnswer[i]) {
-          const newAnswer = currentAnswer.substring(0, i) + correctAnswer[i] + currentAnswer.substring(i + 1);
-          setAnswers({ ...answers, [questionId]: newAnswer });
-          setHintsUsed(hintsUsed + 1);
-          break;
-        }
-      }
+
+    if (!selectedCell) {
+      alert('Pilih sel terlebih dahulu!');
+      return;
     }
+
+    const { row, col } = selectedCell;
+    const newGrid = grid.map(r => r.map(c => ({...c})));
+    newGrid[row][col].letter = newGrid[row][col].correctLetter;
+    setGrid(newGrid);
+    setHintsUsed(hintsUsed + 1);
   };
 
   const submitGame = async () => {
@@ -259,67 +448,40 @@ const CrosswordGame = () => {
     
     const duration = Math.floor((end - startTime) / 1000);
     let correctCount = 0;
-    
-    questions.forEach(q => {
-      if (answers[q.id]?.toUpperCase() === q.answer.toUpperCase()) {
-        correctCount++;
-      }
+    let totalCells = 0;
+
+    grid.forEach(row => {
+      row.forEach(cell => {
+        if (!cell.isBlack && cell.correctLetter) {
+          totalCells++;
+          if (cell.letter === cell.correctLetter) {
+            correctCount++;
+          }
+        }
+      });
     });
 
-    const score = correctCount * 20;
-
-    console.log('Submitting game:', {
-      user_id: user.id,
-      level_id: currentLevel.id,
-      score,
-      duration,
-      hintsUsed,
-      correctCount,
-    });
+    const score = Math.floor((correctCount / totalCells) * 100);
 
     try {
-      // Simpan game session
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('game_sessions')
-        .insert([{
-          user_id: user.id,
-          level_id: currentLevel.id,
-          score: score,
-          duration: duration,
-          hints_used: hintsUsed,
-          correct_answers: correctCount,
-          total_questions: questions.length,
-        }])
-        .select();
+      await supabase.from('game_sessions').insert([{
+        user_id: user.id,
+        level_id: currentLevel.id,
+        score: score,
+        duration: duration,
+        hints_used: hintsUsed,
+        correct_answers: correctCount,
+        total_questions: totalCells,
+      }]);
 
-      if (sessionError) {
-        console.error('Error saving session:', sessionError);
-        throw sessionError;
-      }
-      
-      console.log('Session saved:', sessionData);
-
-      // Simpan ke leaderboard
-      const { data: leaderData, error: leaderError } = await supabase
-        .from('leaderboard')
-        .insert([{
-          user_id: user.id,
-          level_id: currentLevel.id,
-          score: score,
-          duration: duration,
-        }])
-        .select();
-
-      if (leaderError) {
-        console.error('Error saving leaderboard:', leaderError);
-        throw leaderError;
-      }
-      
-      console.log('Leaderboard saved:', leaderData);
-      
+      await supabase.from('leaderboard').insert([{
+        user_id: user.id,
+        level_id: currentLevel.id,
+        score: score,
+        duration: duration,
+      }]);
     } catch (error) {
       console.error('Error saving game:', error);
-      alert('Gagal menyimpan hasil game: ' + error.message);
     }
 
     setShowReview(true);
@@ -339,11 +501,9 @@ const CrosswordGame = () => {
         .limit(10);
       
       if (error) throw error;
-      console.log('Leaderboard loaded:', data);
       setLeaderboard(data || []);
       setPage('leaderboard');
     } catch (error) {
-      console.error('Error loading leaderboard:', error);
       alert('Gagal memuat leaderboard: ' + error.message);
     }
   };
@@ -364,81 +524,61 @@ const CrosswordGame = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  placeholder="email@example.com"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                 <input
                   type="password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  placeholder="Minimal 6 karakter"
                 />
               </div>
-              <button 
-                onClick={handleLogin}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
-              >
+              <button onClick={handleLogin} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700">
                 Login
               </button>
-              <button
-                onClick={() => setIsRegister(true)}
-                className="w-full text-indigo-600 py-2 text-sm hover:underline"
-              >
-                Belum punya akun? Daftar di sini
+              <button onClick={() => setIsRegister(true)} className="w-full text-indigo-600 py-2 text-sm hover:underline">
+                Belum punya akun? Daftar
               </button>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nama Lengkap</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nama</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                   value={registerForm.name}
                   onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-                  placeholder="John Doe"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                 <input
                   type="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                   value={registerForm.email}
                   onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                  placeholder="email@example.com"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                 <input
                   type="password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                   value={registerForm.password}
                   onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                  placeholder="Minimal 6 karakter"
                 />
               </div>
-              <button 
-                onClick={handleRegister}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
-              >
+              <button onClick={handleRegister} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700">
                 Daftar
               </button>
-              <button
-                onClick={() => {
-                  setIsRegister(false);
-                  setRegisterForm({ name: '', email: '', password: '' });
-                }}
-                className="w-full text-indigo-600 py-2 text-sm hover:underline"
-              >
-                Sudah punya akun? Login di sini
+              <button onClick={() => setIsRegister(false)} className="w-full text-indigo-600 py-2 text-sm hover:underline">
+                Sudah punya akun? Login
               </button>
             </div>
           )}
@@ -461,28 +601,19 @@ const CrosswordGame = () => {
                   {user?.name || 'User'}
                 </p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-              >
+              <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
                 <LogOut size={18} />
                 Logout
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={loadLevels}
-                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4"
-              >
+              <button onClick={loadLevels} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-8 rounded-xl hover:shadow-lg flex flex-col items-center gap-4">
                 <Play size={48} />
                 <span className="text-2xl font-bold">Mulai Main</span>
               </button>
 
-              <button
-                onClick={loadLeaderboard}
-                className="bg-gradient-to-r from-yellow-500 to-orange-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4"
-              >
+              <button onClick={loadLeaderboard} className="bg-gradient-to-r from-yellow-500 to-orange-600 text-white p-8 rounded-xl hover:shadow-lg flex flex-col items-center gap-4">
                 <Trophy size={48} />
                 <span className="text-2xl font-bold">Leaderboard</span>
               </button>
@@ -501,26 +632,20 @@ const CrosswordGame = () => {
           <div className="bg-white rounded-2xl shadow-2xl p-8">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-bold text-indigo-600">Pilih Level</h2>
-              <button
-                onClick={() => setPage('menu')}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-              >
+              <button onClick={() => setPage('menu')} className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
                 Kembali
               </button>
             </div>
 
             {levels.length === 0 ? (
-              <div className="text-center text-gray-500 py-12">
-                <p className="text-xl mb-4">Belum ada level tersedia.</p>
-                <p>Silakan hubungi admin untuk menambahkan level dan soal.</p>
-              </div>
+              <div className="text-center text-gray-500 py-12">Belum ada level</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {levels.map((level) => (
                   <button
                     key={level.id}
                     onClick={() => startLevel(level)}
-                    className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-xl hover:shadow-lg transition"
+                    className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-xl hover:shadow-lg"
                   >
                     <div className="text-4xl font-bold mb-2">Level {level.level_number}</div>
                     <div className="text-lg">{level.level_name}</div>
@@ -535,73 +660,93 @@ const CrosswordGame = () => {
     );
   }
 
-  // GAME PAGE
+  // GAME PAGE WITH GRID
   if (page === 'game' && !showReview) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-indigo-600">
-                {currentLevel?.level_name}
-              </h2>
+              <h2 className="text-2xl font-bold text-indigo-600">{currentLevel?.level_name}</h2>
               <div className="flex gap-4 items-center">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Lightbulb size={20} className="text-yellow-500" />
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="text-yellow-500" size={20} />
                   <span className="font-semibold">{3 - hintsUsed} Hint</span>
+                </div>
+                <button onClick={useHint} disabled={hintsUsed >= 3} className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-300">
+                  Gunakan Hint
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* GRID */}
+              <div className="lg:col-span-2">
+                <div className="inline-block bg-gray-100 p-4 rounded-lg">
+                  {grid.map((row, rowIdx) => (
+                    <div key={rowIdx} className="flex">
+                      {row.map((cell, colIdx) => (
+                        <div
+                          key={colIdx}
+                          onClick={() => handleCellClick(rowIdx, colIdx)}
+                          className={`w-8 h-8 border border-gray-400 flex items-center justify-center relative cursor-pointer
+                            ${cell.isBlack ? 'bg-gray-800' : 'bg-white'}
+                            ${selectedCell?.row === rowIdx && selectedCell?.col === colIdx ? 'ring-2 ring-blue-500' : ''}
+                          `}
+                        >
+                          {cell.number && !cell.isBlack && (
+                            <span className="absolute top-0 left-0 text-xs font-bold text-gray-600">{cell.number}</span>
+                          )}
+                          {!cell.isBlack && (
+                            <input
+                              type="text"
+                              maxLength={1}
+                              value={cell.letter}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase();
+                                if (/^[A-Z]?$/.test(val)) {
+                                  const newGrid = grid.map(r => r.map(c => ({...c})));
+                                  newGrid[rowIdx][colIdx].letter = val;
+                                  setGrid(newGrid);
+                                }
+                              }}
+                              onKeyDown={(e) => handleKeyPress(e, rowIdx, colIdx)}
+                              className="w-full h-full text-center font-bold text-lg bg-transparent border-none outline-none uppercase"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CLUES */}
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div>
+                  <h3 className="font-bold text-lg mb-2 text-indigo-600">Mendatar</h3>
+                  {clues.across.map(clue => (
+                    <div key={clue.number} className="mb-2 text-sm">
+                      <span className="font-bold">{clue.number}.</span> {clue.clue}
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg mb-2 text-purple-600">Menurun</h3>
+                  {clues.down.map(clue => (
+                    <div key={clue.number} className="mb-2 text-sm">
+                      <span className="font-bold">{clue.number}.</span> {clue.clue}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="space-y-6">
-              {questions.map((q, idx) => (
-                <div key={q.id} className="bg-gray-50 rounded-lg p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <div className="font-bold text-lg text-indigo-600 mb-2">
-                        {idx + 1}. {q.direction === 'across' ? 'MENDATAR' : 'MENURUN'}
-                      </div>
-                      <p className="text-gray-700">{q.clue}</p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        ({q.answer.length} huruf)
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => useHint(q.id)}
-                      disabled={hintsUsed >= 3}
-                      className="ml-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center gap-2"
-                    >
-                      <Lightbulb size={18} />
-                      Hint
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={q.answer.length}
-                    value={answers[q.id] || ''}
-                    onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-indigo-300 rounded-lg text-2xl font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder={`${'_'.repeat(q.answer.length)}`}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-4 mt-8">
-              <button
-                onClick={() => {
-                  if (confirm('Yakin ingin kembali? Progress akan hilang.')) {
-                    setPage('levels');
-                  }
-                }}
-                className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-              >
+            <div className="flex gap-4 mt-6">
+              <button onClick={() => setPage('levels')} className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
                 Kembali
               </button>
-              <button
-                onClick={submitGame}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold text-lg"
-              >
+              <button onClick={submitGame} className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">
                 Selesai & Lihat Hasil
               </button>
             </div>
@@ -613,82 +758,74 @@ const CrosswordGame = () => {
 
   // REVIEW PAGE
   if (page === 'game' && showReview) {
-    const correctCount = questions.filter(q => 
-      answers[q.id]?.toUpperCase() === q.answer.toUpperCase()
-    ).length;
-    const score = correctCount * 20;
+    let correctCount = 0;
+    let totalCells = 0;
+
+    grid.forEach(row => {
+      row.forEach(cell => {
+        if (!cell.isBlack && cell.correctLetter) {
+          totalCells++;
+          if (cell.letter === cell.correctLetter) {
+            correctCount++;
+          }
+        }
+      });
+    });
+
+    const score = Math.floor((correctCount / totalCells) * 100);
     const duration = Math.floor((endTime - startTime) / 1000);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-indigo-600 mb-4">Hasil Permainan</h2>
-              <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
-                <div className="bg-blue-100 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{score}</div>
-                  <div className="text-sm text-gray-600">Skor</div>
-                </div>
-                <div className="bg-green-100 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{correctCount}/{questions.length}</div>
-                  <div className="text-sm text-gray-600">Benar</div>
-                </div>
-                <div className="bg-purple-100 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{duration}s</div>
-                  <div className="text-sm text-gray-600">Waktu</div>
-                </div>
+            <h2 className="text-3xl font-bold text-indigo-600 mb-6 text-center">Hasil Permainan</h2>
+            
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="bg-blue-100 p-4 rounded-lg text-center">
+                <div className="text-3xl font-bold text-blue-600">{score}</div>
+                <div className="text-sm text-gray-600">Skor</div>
+              </div>
+              <div className="bg-green-100 p-4 rounded-lg text-center">
+                <div className="text-3xl font-bold text-green-600">{correctCount}/{totalCells}</div>
+                <div className="text-sm text-gray-600">Benar</div>
+              </div>
+              <div className="bg-purple-100 p-4 rounded-lg text-center">
+                <div className="text-3xl font-bold text-purple-600">{duration}s</div>
+                <div className="text-sm text-gray-600">Waktu</div>
               </div>
             </div>
 
-            <div className="space-y-4 mb-8">
-              <h3 className="text-xl font-bold text-gray-700">Review Jawaban:</h3>
-              {questions.map((q, idx) => {
-                const isCorrect = answers[q.id]?.toUpperCase() === q.answer.toUpperCase();
-                return (
-                  <div key={q.id} className={`p-4 rounded-lg ${isCorrect ? 'bg-green-50 border-2 border-green-300' : 'bg-red-50 border-2 border-red-300'}`}>
-                    <div className="flex items-start gap-3">
-                      {isCorrect ? (
-                        <CheckCircle className="text-green-600 flex-shrink-0 mt-1" size={24} />
-                      ) : (
-                        <XCircle className="text-red-600 flex-shrink-0 mt-1" size={24} />
-                      )}
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-700 mb-1">
-                          {idx + 1}. {q.clue}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-gray-600">Jawaban Kamu: </span>
-                            <span className={`font-bold ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                              {answers[q.id] || '(tidak dijawab)'}
-                            </span>
-                          </div>
-                          {!isCorrect && (
-                            <div>
-                              <span className="text-gray-600">Jawaban Benar: </span>
-                              <span className="font-bold text-green-600">{q.answer}</span>
-                            </div>
-                          )}
-                        </div>
+            <div className="mb-6">
+              <h3 className="font-bold text-lg mb-4">Grid Jawaban:</h3>
+              <div className="inline-block bg-gray-100 p-4 rounded-lg">
+                {grid.map((row, rowIdx) => (
+                  <div key={rowIdx} className="flex">
+                    {row.map((cell, colIdx) => (
+                      <div
+                        key={colIdx}
+                        className={`w-8 h-8 border border-gray-400 flex items-center justify-center text-sm font-bold relative
+                          ${cell.isBlack ? 'bg-gray-800' : 
+                            cell.letter === cell.correctLetter ? 'bg-green-200' : 
+                            cell.letter ? 'bg-red-200' : 'bg-white'}
+                        `}
+                      >
+                        {cell.number && !cell.isBlack && (
+                          <span className="absolute top-0 left-0 text-xs">{cell.number}</span>
+                        )}
+                        {!cell.isBlack && cell.correctLetter}
                       </div>
-                    </div>
+                    ))}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
 
             <div className="flex gap-4">
-              <button
-                onClick={() => setPage('levels')}
-                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold"
-              >
+              <button onClick={() => setPage('levels')} className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold">
                 Pilih Level Lain
               </button>
-              <button
-                onClick={() => startLevel(currentLevel)}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2"
-              >
+              <button onClick={() => startLevel(currentLevel)} className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold flex items-center justify-center gap-2">
                 <RotateCcw size={20} />
                 Main Lagi
               </button>
