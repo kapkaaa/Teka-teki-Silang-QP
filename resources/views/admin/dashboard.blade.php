@@ -70,7 +70,6 @@
                 <tr>
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Title</th>
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Size</th>
-                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Created</th>
                     <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
                 </tr>
             </thead>
@@ -79,7 +78,6 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3">{{ $puzzle->title }}</td>
                     <td class="px-4 py-3">{{ $puzzle->rows }}x{{ $puzzle->cols }}</td>
-                    <td class="px-4 py-3">{{ $puzzle->created_at->diffForHumans() }}</td>
                     <td class="px-4 py-3">
                         <a href="{{ route('admin.puzzles.edit', $puzzle->id) }}" class="text-indigo-600 hover:underline">
                             Edit
