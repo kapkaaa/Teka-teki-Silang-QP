@@ -11,6 +11,14 @@ import {
   Grid3x3,
 } from 'lucide-react';
 
+// Components
+import Login from './components/Login';
+import Menu from './components/Menu';
+import Levels from './components/Levels';
+import Game from './components/Game';
+import Review from './components/Review';
+import Leaderboard from './components/Leaderboard';
+
 // 🔐 HANYA URL YANG BOLEH ADA DI FRONTEND
 // Supabase anon key TIDAK PERLU — client otomatis pakai session
 const supabaseUrl = 'https://xpdpbxzfxhixzmvcswsy.supabase.co';
@@ -48,13 +56,13 @@ const CrosswordGame = () => {
       if (session?.user) {
         // Tunggu 1 detik agar trigger sempat jalan (opsional, tapi aman)
         await new Promise(r => setTimeout(r, 1000));
-        
+
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('auth_id', session.user.id)
           .single(); // pakai .single() karena auth_id UNIQUE
-    
+
         if (userData) {
           setUser(userData);
           setPage('menu');
@@ -75,33 +83,33 @@ const CrosswordGame = () => {
     }
     setLoading(true);
     setError('');
-  
+
     try {
       // CUKUP INI SAJA!
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: loginForm.email.trim(),
         password: loginForm.password,
       });
-  
+
       if (authError) throw authError;
-  
+
       // Setelah login sukses, ambil user dari public.users
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         // Tunggu sebentar agar trigger sempat jalan (jika user baru)
         await new Promise(r => setTimeout(r, 800));
-        
+
         const { data: userData, error: fetchError } = await supabase
           .from('users')
           .select('*')
           .eq('auth_id', session.user.id)
           .single();
-  
+
         if (fetchError || !userData) {
           setError('User tidak ditemukan. Silakan coba lagi.');
           return;
         }
-  
+
         setUser(userData);
         setPage('menu');
       }
@@ -126,7 +134,7 @@ const CrosswordGame = () => {
     }
     setLoading(true);
     setError('');
-  
+
     try {
       // CUKUP INI SAJA!
       const { error: authError } = await supabase.auth.signUp({
@@ -136,9 +144,9 @@ const CrosswordGame = () => {
           data: { username: registerForm.name } // kirim ke raw_user_meta_data
         }
       });
-  
+
       if (authError) throw authError;
-  
+
       alert('Registrasi berhasil! Silakan login.');
       setIsRegister(false);
       setRegisterForm({ name: '', email: '', password: '' });
@@ -207,7 +215,7 @@ const CrosswordGame = () => {
       }));
 
       // Bangun grid: mulai dengan SEMUA SEL PUTIH (isBlack: false), lalu hitamkan yang tidak dipakai
-      const grid = Array(level.rows).fill().map(() => 
+      const grid = Array(level.rows).fill().map(() =>
         Array(level.cols).fill().map(() => ({
           isBlack: false, // default putih
           letter: '',
@@ -431,21 +439,21 @@ const CrosswordGame = () => {
   const loadLeaderboard = async () => {
     setLoading(true);
     try {
-      // Ambil dari view yang sudah di-agregasi
+      // Ambil dari view yang sudah di-aggregasi
       const { data, error } = await supabase
         .from('leaderboard_view')
         .select('username, total_correct')
         .limit(10); // Ambil top 10
-  
+
       if (error) throw error;
-  
+
       // Format sesuai kebutuhan UI
       const leaderboardData = data.map((item, idx) => ({
         id: idx,
         username: item.username || 'Anonymous',
         total_correct: item.total_correct || 0
       }));
-  
+
       setLeaderboard(leaderboardData);
       setPage('leaderboard');
     } catch (err) {
@@ -460,405 +468,88 @@ const CrosswordGame = () => {
 
   if (page === 'login') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <h1 className="text-4xl font-bold text-indigo-600 mb-2">QuizPlay</h1>
-            <p className="text-gray-600">Teka Teki Silang</p>
-          </div>
-
-          {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded text-center">{error}</div>}
-          
-          {!isRegister ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  placeholder="email@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  placeholder="Minimal 6 karakter"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
-              >
-                {loading ? 'Loading...' : 'Login'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsRegister(true)}
-                className="w-full text-indigo-600 py-2 text-sm hover:underline"
-              >
-                Belum punya akun? Daftar di sini
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama</label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
-              >
-                {loading ? 'Loading...' : 'Daftar'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsRegister(false)}
-                className="w-full text-indigo-600 py-2 text-sm hover:underline"
-              >
-                Sudah punya akun? Login
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+      <Login
+        loginForm={loginForm}
+        setLoginForm={setLoginForm}
+        registerForm={registerForm}
+        setRegisterForm={setRegisterForm}
+        isRegister={isRegister}
+        setIsRegister={setIsRegister}
+        handleLogin={handleLogin}
+        handleRegister={handleRegister}
+        error={error}
+        loading={loading}
+      />
     );
   }
 
-  // Sisa halaman (menu, levels, game, review, leaderboard) tetap seperti sebelumnya
-  // Tapi tambahkan {error && <div className="text-red-500">{error}</div>} di tiap halaman
-
   if (page === 'menu') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
-            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-indigo-600">QuizPlay TTS</h1>
-                <p className="text-gray-600 flex items-center gap-2 mt-2">
-                  <User size={18} /> {user?.username}
-                </p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-              >
-                <LogOut size={18} /> Logout
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={loadLevels}
-                disabled={loading}
-                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4 disabled:opacity-50"
-              >
-                <Play size={48} />
-                <span className="text-2xl font-bold">Mulai Main</span>
-              </button>
-
-              <button
-                onClick={loadLeaderboard}
-                disabled={loading}
-                className="bg-gradient-to-r from-yellow-500 to-orange-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4 disabled:opacity-50"
-              >
-                <Trophy size={48} />
-                <span className="text-2xl font-bold">Leaderboard</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Menu
+        user={user}
+        handleLogout={handleLogout}
+        loadLevels={loadLevels}
+        loadLeaderboard={loadLeaderboard}
+        error={error}
+      />
     );
   }
 
   if (page === 'levels') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
-            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-3xl font-bold text-indigo-600">Pilih Level</h2>
-              <button
-                onClick={() => setPage('menu')}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-              >
-                Kembali
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-12">Memuat level...</div>
-            ) : levels.length === 0 ? (
-              <div className="text-center text-gray-500 py-12">Belum ada level.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {levels.map((level) => (
-                  <button
-                    key={level.id}
-                    onClick={() => startLevel(level)}
-                    className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-xl hover:shadow-lg transition"
-                  >
-                    <div className="text-4xl font-bold mb-2">Level {level.level_number}</div>
-                    <div className="text-lg">{level.title}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <Levels
+        levels={levels}
+        startLevel={startLevel}
+        loading={loading}
+        error={error}
+        setPage={setPage}
+      />
     );
   }
 
   if (page === 'game' && !showReview) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
-            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-indigo-600">{currentLevel?.title}</h2>
-              <div className="flex gap-4 items-center">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Lightbulb size={20} className="text-yellow-500" />
-                  <span className="font-semibold">{3 - hintsUsed} Hint</span>
-                </div>
-                <button
-                  onClick={useHint}
-                  disabled={hintsUsed >= 3}
-                  className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-300 transition"
-                >
-                  Gunakan Hint
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                <div className="bg-gray-100 p-4 rounded-lg inline-block">
-                  {grid.map((row, rowIdx) => (
-                    <div key={rowIdx} className="flex">
-                      {row.map((cell, colIdx) => (
-                        <div key={`${rowIdx}-${colIdx}`} className="relative">
-                          {cell.isBlack ? (
-                            <div className="w-12 h-12 bg-gray-800 border border-gray-900" />
-                          ) : (
-                            <div className="relative">
-                              {cell.number && (
-                                <div className="absolute top-0 left-0 text-xs font-bold text-indigo-600 pl-1 pt-0.5 z-10">
-                                  {cell.number}
-                                </div>
-                              )}
-                              <input
-                                ref={(el) => gridRefs.current[`${rowIdx}-${colIdx}`] = el}
-                                type="text"
-                                maxLength="1"
-                                value={userAnswers[`${rowIdx}-${colIdx}`] || ''}
-                                onChange={() => {}}
-                                onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
-                                onClick={() => handleCellClick(rowIdx, colIdx)}
-                                className={`w-12 h-12 border-2 text-center text-xl font-bold uppercase focus:outline-none ${
-                                  selectedCell?.row === rowIdx && selectedCell?.col === colIdx
-                                    ? direction === 'across' 
-                                      ? 'bg-blue-200 border-blue-500'
-                                      : 'bg-green-200 border-green-500'
-                                    : 'bg-white border-gray-400'
-                                }`}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">📝 MENDATAR</h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {questions.filter(q => q.direction === 'across').map((q) => (
-                      <div key={q.id} className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                        <span className="font-bold text-indigo-600">{q.number}.</span> {q.clue}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-3">📝 MENURUN</h3>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {questions.filter(q => q.direction === 'down').map((q) => (
-                      <div key={q.id} className="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                        <span className="font-bold text-purple-600">{q.number}.</span> {q.clue}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4 mt-8">
-              <button
-                onClick={() => setPage('levels')}
-                className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-              >
-                Kembali
-              </button>
-              <button
-                onClick={submitGame}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
-              >
-                Selesai & Lihat Hasil
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Game
+        grid={grid}
+        userAnswers={userAnswers}
+        selectedCell={selectedCell}
+        direction={direction}
+        currentLevel={currentLevel}
+        hintsUsed={hintsUsed}
+        error={error}
+        gridRefs={gridRefs}
+        handleKeyDown={handleKeyDown}
+        handleCellClick={handleCellClick}
+        useHint={useHint}
+        submitGame={submitGame}
+        questions={questions}
+        setPage={setPage}
+      />
     );
   }
 
   if (page === 'game' && showReview) {
-    let totalWords = questions.length;
-    let correctWords = 0;
-    for (const q of questions) {
-      let userWord = '';
-      for (let i = 0; i < q.answer.length; i++) {
-        const row = q.direction === 'down' ? q.position_y + i : q.position_y;
-        const col = q.direction === 'across' ? q.position_x + i : q.position_x;
-        userWord += userAnswers[`${row}-${col}`] || '';
-      }
-      if (userWord === q.answer.toUpperCase()) correctWords++;
-    }
-    const score = totalWords > 0 ? Math.floor((correctWords / totalWords) * 100) : 0;
-    const duration = Math.floor((endTime - startTime) / 1000);
-
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
-            <h2 className="text-3xl font-bold text-indigo-600 mb-8 text-center">Hasil Permainan</h2>
-            
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              <div className="bg-blue-100 p-6 rounded-lg text-center">
-                <div className="text-3xl font-bold text-blue-600">{score}</div>
-                <div className="text-gray-600">Skor</div>
-              </div>
-              <div className="bg-green-100 p-6 rounded-lg text-center">
-                <div className="text-3xl font-bold text-green-600">{correctWords}/{totalWords}</div>
-                <div className="text-gray-600">Kata Benar</div>
-              </div>
-              <div className="bg-purple-100 p-6 rounded-lg text-center">
-                <div className="text-3xl font-bold text-purple-600">{duration}s</div>
-                <div className="text-gray-600">Waktu</div>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => setPage('levels')}
-                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-              >
-                Pilih Level Lain
-              </button>
-              <button
-                onClick={() => startLevel(currentLevel)}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                <RotateCcw size={20} className="inline mr-2" />
-                Main Lagi
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Review
+        questions={questions}
+        userAnswers={userAnswers}
+        startTime={startTime}
+        endTime={endTime}
+        currentLevel={currentLevel}
+        setPage={setPage}
+        startLevel={startLevel}
+      />
     );
   }
 
   if (page === 'leaderboard') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
-            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-3xl font-bold text-indigo-600 flex items-center gap-3">
-                <Trophy className="text-yellow-500" size={36} />
-                Leaderboard
-              </h2>
-              <button
-                onClick={() => setPage('menu')}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-              >
-                Kembali
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-12">Memuat leaderboard...</div>
-            ) : leaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 py-12">Belum ada data.</div>
-            ) : (
-              <div className="space-y-3">
-                {leaderboard.map((entry, idx) => (
-                  <div
-                    key={entry.id}
-                    className={`flex items-center gap-4 p-4 rounded-lg ${
-                      idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white' :
-                      idx === 1 ? 'bg-gray-200' :
-                      idx === 2 ? 'bg-orange-200' :
-                      'bg-gray-100'
-                    }`}
-                  >
-                    <div className="text-2xl font-bold w-12 text-center">{idx + 1}</div>
-                    <div className="flex-1 font-bold">{entry.username}</div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold">{entry.total_correct}</div>
-                      <div className="text-sm text-gray-600">Jawaban Benar</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <Leaderboard
+        leaderboard={leaderboard}
+        loading={loading}
+        error={error}
+        setPage={setPage}
+      />
     );
   }
 
