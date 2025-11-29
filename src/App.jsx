@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   Trophy,
@@ -11,10 +11,13 @@ import {
   Grid3x3,
 } from 'lucide-react';
 
-// 🔐 Ganti dengan credentials Supabase Anda
+// 🔐 HANYA URL YANG BOLEH ADA DI FRONTEND
+// Supabase anon key TIDAK PERLU — client otomatis pakai session
 const supabaseUrl = 'https://xpdpbxzfxhixzmvcswsy.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZHBieHpmeGhpeHptdmNzd3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2OTQwNTQsImV4cCI6MjA3OTI3MDA1NH0.2dpbe4Vk6PM1AY6PiIYGKmcZo5tcJxOD_4Jnras1mlg';
-const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim());
+const supabasAnoneKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZHBieHpmeGhpeHptdmNzd3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2OTQwNTQsImV4cCI6MjA3OTI3MDA1NH0.2dpbe4Vk6PM1AY6PiIYGKmcZo5tcJxOD_4Jnras1mlg';
+// JANGAN SIMPAN supabaseKey DI SINI! Supabase client pakai session dari auth
+
+const supabase = createClient(supabaseUrl, supabasAnoneKey);
 
 const CrosswordGame = () => {
   const [user, setUser] = useState(null);
@@ -34,120 +37,116 @@ const CrosswordGame = () => {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '' });
   const [isRegister, setIsRegister] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const gridRefs = useRef({});
 
+  // Cek user saat mount
   useEffect(() => {
-    checkUser();
-  }, []);
-
-  const checkUser = async () => {
-    try {
+    const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // Tunggu 1 detik agar trigger sempat jalan (opsional, tapi aman)
+        await new Promise(r => setTimeout(r, 1000));
+        
         const { data: userData } = await supabase
           .from('users')
           .select('*')
           .eq('auth_id', session.user.id)
-          .maybeSingle();
-
+          .single(); // pakai .single() karena auth_id UNIQUE
+    
         if (userData) {
           setUser(userData);
           setPage('menu');
+        } else {
+          setError('User tidak ditemukan. Silakan coba login lagi.');
         }
       }
-    } catch (error) {
-      console.error('Check user error:', error);
-    }
-  };
+    };
+    checkUser();
+  }, []);
 
-  const handleLogin = async () => {
+  // Handler login
+  const handleLogin = async (e) => {
+    e.preventDefault();
     if (!loginForm.email || !loginForm.password) {
-      alert('Email dan password harus diisi!');
+      setError('Email dan password harus diisi!');
       return;
     }
-
+    setLoading(true);
+    setError('');
+  
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: loginForm.email,
+      // CUKUP INI SAJA!
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: loginForm.email.trim(),
         password: loginForm.password,
       });
-
+  
       if (authError) throw authError;
-
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('auth_id', authData.user.id)
-        .maybeSingle();
-
-      if (!userData) {
-        const { data: newUser } = await supabase
+  
+      // Setelah login sukses, ambil user dari public.users
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        // Tunggu sebentar agar trigger sempat jalan (jika user baru)
+        await new Promise(r => setTimeout(r, 800));
+        
+        const { data: userData, error: fetchError } = await supabase
           .from('users')
-          .insert([{
-            auth_id: authData.user.id,
-            username: authData.user.email.split('@')[0],
-            email: authData.user.email,
-          }])
-          .select()
+          .select('*')
+          .eq('auth_id', session.user.id)
           .single();
-        setUser(newUser);
-      } else {
+  
+        if (fetchError || !userData) {
+          setError('User tidak ditemukan. Silakan coba lagi.');
+          return;
+        }
+  
         setUser(userData);
+        setPage('menu');
       }
-
-      setPage('menu');
-      alert('Login berhasil!');
-    } catch (error) {
-      alert('Login gagal: ' + error.message);
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message || 'Login gagal');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRegister = async () => {
+  // Handler register
+  const handleRegister = async (e) => {
+    e.preventDefault();
     if (!registerForm.name || !registerForm.email || !registerForm.password) {
-      alert('Semua field harus diisi!');
+      setError('Semua field harus diisi!');
       return;
     }
-
     if (registerForm.password.length < 6) {
-      alert('Password minimal 6 karakter!');
+      setError('Password minimal 6 karakter!');
       return;
     }
-
+    setLoading(true);
+    setError('');
+  
     try {
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', registerForm.email)
-        .maybeSingle();
-
-      if (existingUser) {
-        alert('Email sudah terdaftar! Silakan login.');
-        setIsRegister(false);
-        return;
-      }
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: registerForm.email,
+      // CUKUP INI SAJA!
+      const { error: authError } = await supabase.auth.signUp({
+        email: registerForm.email.trim(),
         password: registerForm.password,
+        options: {
+          data: { username: registerForm.name } // kirim ke raw_user_meta_data
+        }
       });
-
+  
       if (authError) throw authError;
-
-      if (authData.user) {
-        await supabase
-          .from('users')
-          .insert([{
-            auth_id: authData.user.id,
-            username: registerForm.name,
-            email: registerForm.email,
-          }]);
-      }
-
+  
       alert('Registrasi berhasil! Silakan login.');
       setIsRegister(false);
       setRegisterForm({ name: '', email: '', password: '' });
-    } catch (error) {
-      alert('Registrasi gagal: ' + error.message);
+    } catch (err) {
+      console.error('Register error:', err);
+      setError(err.message || 'Registrasi gagal');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -158,6 +157,7 @@ const CrosswordGame = () => {
   };
 
   const loadLevels = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('puzzles')
@@ -174,13 +174,15 @@ const CrosswordGame = () => {
 
       setLevels(levelsWithNumber);
       setPage('levels');
-    } catch (error) {
-      console.error('Error loading levels:', error);
-      alert('Gagal memuat level: ' + error.message);
+    } catch (err) {
+      setError('Gagal memuat level: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const startLevel = async (level) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('puzzle_words')
@@ -190,7 +192,7 @@ const CrosswordGame = () => {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        alert('Level ini belum ada soal. Silakan pilih level lain.');
+        setError('Level ini belum ada soal.');
         return;
       }
 
@@ -199,41 +201,48 @@ const CrosswordGame = () => {
         answer: q.answer.trim().toUpperCase(),
         clue: q.clue,
         direction: q.direction.toLowerCase(),
-        position_x: q.start_col -1,
-        position_y: q.start_row -1,
+        position_x: q.start_col - 1,
+        position_y: q.start_row - 1,
         number: q.number
       }));
 
-      const grid = Array(level.rows).fill(null).map(() =>
-        Array(level.cols).fill(null).map(() => ({
+      // Bangun grid: mulai dengan SEMUA SEL PUTIH (isBlack: false), lalu hitamkan yang tidak dipakai
+      const grid = Array(level.rows).fill().map(() => 
+        Array(level.cols).fill().map(() => ({
+          isBlack: false, // default putih
           letter: '',
-          isBlack: true,
           number: null,
           acrossClue: null,
           downClue: null
         }))
       );
 
-      adaptedQuestions.forEach((q) => {
-        const answer = q.answer;
-        for (let i = 0; i < answer.length; i++) {
+      // Tandai sel yang digunakan oleh kata
+      const usedCells = new Set();
+      adaptedQuestions.forEach(q => {
+        for (let i = 0; i < q.answer.length; i++) {
           const row = q.direction === 'down' ? q.position_y + i : q.position_y;
           const col = q.direction === 'across' ? q.position_x + i : q.position_x;
-
           if (row < level.rows && col < level.cols) {
-            grid[row][col].isBlack = false;
-            grid[row][col].letter = answer[i];
+            usedCells.add(`${row}-${col}`);
+            grid[row][col].letter = q.answer[i];
             if (i === 0) {
               grid[row][col].number = q.number;
-              if (q.direction === 'across') {
-                grid[row][col].acrossClue = q.id;
-              } else {
-                grid[row][col].downClue = q.id;
-              }
+              if (q.direction === 'across') grid[row][col].acrossClue = q.id;
+              else grid[row][col].downClue = q.id;
             }
           }
         }
       });
+
+      // Sel yang TIDAK digunakan → jadi hitam
+      for (let r = 0; r < level.rows; r++) {
+        for (let c = 0; c < level.cols; c++) {
+          if (!usedCells.has(`${r}-${c}`)) {
+            grid[r][c].isBlack = true;
+          }
+        }
+      }
 
       setQuestions(adaptedQuestions);
       setGrid(grid);
@@ -246,9 +255,10 @@ const CrosswordGame = () => {
       setSelectedCell(null);
       setDirection('across');
       setPage('game');
-    } catch (error) {
-      console.error('Error loading questions:', error);
-      alert('Gagal memuat soal: ' + error.message);
+    } catch (err) {
+      setError('Gagal memuat soal: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -262,13 +272,13 @@ const CrosswordGame = () => {
     }
   };
 
-  const handleKeyDown = (e, row, col) => {
+  const handleKeyDown = useCallback((e, row, col) => {
     if (!grid[row] || !grid[row][col] || grid[row][col].isBlack) return;
 
-    if (e.key.length === 1 && e.key.match(/[a-zA-Z]/)) {
+    if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+      e.preventDefault();
       const newAnswers = { ...userAnswers };
-      const key = `${row}-${col}`;
-      newAnswers[key] = e.key.toUpperCase();
+      newAnswers[`${row}-${col}`] = e.key.toUpperCase();
       setUserAnswers(newAnswers);
 
       let nextRow = row, nextCol = col;
@@ -278,15 +288,15 @@ const CrosswordGame = () => {
       if (
         nextRow < grid.length &&
         nextCol < grid[0]?.length &&
-        grid[nextRow]?.[nextCol]?.isBlack === false
+        !grid[nextRow]?.[nextCol]?.isBlack
       ) {
         setSelectedCell({ row: nextRow, col: nextCol });
         setTimeout(() => gridRefs.current[`${nextRow}-${nextCol}`]?.focus(), 0);
       }
     } else if (e.key === 'Backspace') {
+      e.preventDefault();
       const newAnswers = { ...userAnswers };
-      const key = `${row}-${col}`;
-      delete newAnswers[key];
+      delete newAnswers[`${row}-${col}`];
       setUserAnswers(newAnswers);
 
       let prevRow = row, prevCol = col;
@@ -296,7 +306,7 @@ const CrosswordGame = () => {
       if (
         prevRow >= 0 &&
         prevCol >= 0 &&
-        grid[prevRow]?.[prevCol]?.isBlack === false
+        !grid[prevRow]?.[prevCol]?.isBlack
       ) {
         setSelectedCell({ row: prevRow, col: prevCol });
         setTimeout(() => gridRefs.current[`${prevRow}-${prevCol}`]?.focus(), 0);
@@ -314,21 +324,21 @@ const CrosswordGame = () => {
         newRow < grid.length &&
         newCol >= 0 &&
         newCol < grid[0]?.length &&
-        grid[newRow]?.[newCol]?.isBlack === false
+        !grid[newRow]?.[newCol]?.isBlack
       ) {
         setSelectedCell({ row: newRow, col: newCol });
         setTimeout(() => gridRefs.current[`${newRow}-${newCol}`]?.focus(), 0);
       }
     }
-  };
+  }, [direction, grid, userAnswers]);
 
   const useHint = () => {
     if (hintsUsed >= 3) {
-      alert('Hint sudah habis!');
+      setError('Hint sudah habis!');
       return;
     }
     if (!selectedCell) {
-      alert('Pilih kotak terlebih dahulu!');
+      setError('Pilih kotak terlebih dahulu!');
       return;
     }
 
@@ -352,29 +362,34 @@ const CrosswordGame = () => {
     });
 
     if (!currentWord) {
-      alert('Tidak ada kata di posisi ini!');
+      setError('Tidak ada kata di posisi ini!');
       return;
     }
 
     const answer = currentWord.answer.toUpperCase();
+    let usedHint = false;
     for (let i = 0; i < answer.length; i++) {
       const row = direction === 'down' ? currentWord.position_y + i : currentWord.position_y;
       const col = direction === 'across' ? currentWord.position_x + i : currentWord.position_x;
       const key = `${row}-${col}`;
-
       if (userAnswers[key] !== answer[i]) {
         const newAnswers = { ...userAnswers };
         newAnswers[key] = answer[i];
         setUserAnswers(newAnswers);
         setHintsUsed(hintsUsed + 1);
+        usedHint = true;
         break;
       }
+    }
+
+    if (!usedHint) {
+      setError('Semua huruf sudah benar!');
     }
   };
 
   const submitGame = async () => {
-    if (!user?.id || !currentLevel?.id) {
-      alert('User atau level tidak valid. Silakan login ulang.');
+    if (!user || !user.id || !currentLevel?.id) {
+      setError('User tidak dikenali. Silakan login ulang.');
       setPage('login');
       return;
     }
@@ -382,24 +397,19 @@ const CrosswordGame = () => {
     const endTimeObj = new Date();
     setEndTime(endTimeObj);
     const duration = Math.floor((endTimeObj - startTime) / 1000);
-
-    const userAnswersList = [];
     let correctWords = 0;
+    const userAnswersList = [];
 
     for (const q of questions) {
       let userWord = '';
-      const answer = q.answer.toUpperCase();
-
-      for (let i = 0; i < answer.length; i++) {
+      for (let i = 0; i < q.answer.length; i++) {
         const row = q.direction === 'down' ? q.position_y + i : q.position_y;
         const col = q.direction === 'across' ? q.position_x + i : q.position_x;
-        const key = `${row}-${col}`;
-        userWord += userAnswers[key] || '';
+        userWord += userAnswers[`${row}-${col}`] || '';
       }
 
-      const isCorrect = userWord === answer;
+      const isCorrect = userWord === q.answer;
       if (isCorrect) correctWords++;
-
       userAnswersList.push({
         user_id: user.id,
         puzzle_id: currentLevel.id,
@@ -410,64 +420,59 @@ const CrosswordGame = () => {
     }
 
     try {
-      await supabase.from('user_answers').insert(userAnswersList);
+      const { error } = await supabase.from('user_answers').insert(userAnswersList);
+      if (error) throw error;
       setShowReview(true);
-    } catch (error) {
-      console.error('Error saving answers:', error);
-      alert('Gagal menyimpan jawaban: ' + error.message);
+    } catch (err) {
+      setError('Gagal menyimpan jawaban: ' + err.message);
     }
   };
 
   const loadLeaderboard = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_leaderboard');
-      
-      // Jika tidak membuat RPC, gunakan query manual:
-      // Alternatif: langsung query dengan join
-      if (error) {
-        // Fallback: manual aggregation
-        const { data: answersData } = await supabase
-          .from('user_answers')
-          .select('user_id, users(username)')
-          .eq('is_correct', true);
-
-        const scoreMap = {};
-        answersData.forEach(row => {
-          const name = row.users?.username || 'Anonymous';
-          scoreMap[name] = (scoreMap[name] || 0) + 1;
-        });
-
-        const sorted = Object.entries(scoreMap)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([username, total_correct], idx) => ({ id: idx, username, total_correct }));
-
-        setLeaderboard(sorted);
-      } else {
-        setLeaderboard(data);
-      }
-
+      // Ambil dari view yang sudah di-agregasi
+      const { data, error } = await supabase
+        .from('leaderboard_view')
+        .select('username, total_correct')
+        .limit(10); // Ambil top 10
+  
+      if (error) throw error;
+  
+      // Format sesuai kebutuhan UI
+      const leaderboardData = data.map((item, idx) => ({
+        id: idx,
+        username: item.username || 'Anonymous',
+        total_correct: item.total_correct || 0
+      }));
+  
+      setLeaderboard(leaderboardData);
       setPage('leaderboard');
-    } catch (error) {
-      console.error('Error loading leaderboard:', error);
-      alert('Gagal memuat leaderboard: ' + error.message);
+    } catch (err) {
+      console.error('Leaderboard error:', err);
+      setError('Gagal memuat leaderboard: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // =============== RENDERING ===============
+  // === RENDERING ===
+
   if (page === 'login') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <h1 className="text-4xl font-bold text-indigo-600 mb-2">QuizPlay</h1>
             <p className="text-gray-600">Teka Teki Silang</p>
           </div>
 
+          {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded text-center">{error}</div>}
+          
           {!isRegister ? (
-            <div className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
                   type="email"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -477,7 +482,7 @@ const CrosswordGame = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <input
                   type="password"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -486,23 +491,25 @@ const CrosswordGame = () => {
                   placeholder="Minimal 6 karakter"
                 />
               </div>
-              <button 
-                onClick={handleLogin}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
               >
-                Login
+                {loading ? 'Loading...' : 'Login'}
               </button>
               <button
+                type="button"
                 onClick={() => setIsRegister(true)}
                 className="w-full text-indigo-600 py-2 text-sm hover:underline"
               >
                 Belum punya akun? Daftar di sini
               </button>
-            </div>
+            </form>
           ) : (
-            <div className="space-y-4">
+            <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nama</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama</label>
                 <input
                   type="text"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -511,7 +518,7 @@ const CrosswordGame = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
                   type="email"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -520,7 +527,7 @@ const CrosswordGame = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                 <input
                   type="password"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
@@ -528,51 +535,56 @@ const CrosswordGame = () => {
                   onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
                 />
               </div>
-              <button 
-                onClick={handleRegister}
-                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
               >
-                Daftar
+                {loading ? 'Loading...' : 'Daftar'}
               </button>
               <button
+                type="button"
                 onClick={() => setIsRegister(false)}
                 className="w-full text-indigo-600 py-2 text-sm hover:underline"
               >
                 Sudah punya akun? Login
               </button>
-            </div>
+            </form>
           )}
         </div>
       </div>
     );
   }
 
+  // Sisa halaman (menu, levels, game, review, leaderboard) tetap seperti sebelumnya
+  // Tapi tambahkan {error && <div className="text-red-500">{error}</div>} di tiap halaman
+
   if (page === 'menu') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
+            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h1 className="text-3xl font-bold text-indigo-600">QuizPlay TTS</h1>
                 <p className="text-gray-600 flex items-center gap-2 mt-2">
-                  <User size={18} />
-                  {user?.username}
+                  <User size={18} /> {user?.username}
                 </p>
               </div>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
               >
-                <LogOut size={18} />
-                Logout
+                <LogOut size={18} /> Logout
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={loadLevels}
-                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4"
+                disabled={loading}
+                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4 disabled:opacity-50"
               >
                 <Play size={48} />
                 <span className="text-2xl font-bold">Mulai Main</span>
@@ -580,7 +592,8 @@ const CrosswordGame = () => {
 
               <button
                 onClick={loadLeaderboard}
-                className="bg-gradient-to-r from-yellow-500 to-orange-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4"
+                disabled={loading}
+                className="bg-gradient-to-r from-yellow-500 to-orange-600 text-white p-8 rounded-xl hover:shadow-lg transition flex flex-col items-center gap-4 disabled:opacity-50"
               >
                 <Trophy size={48} />
                 <span className="text-2xl font-bold">Leaderboard</span>
@@ -597,6 +610,7 @@ const CrosswordGame = () => {
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
+            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-bold text-indigo-600">Pilih Level</h2>
               <button
@@ -607,10 +621,10 @@ const CrosswordGame = () => {
               </button>
             </div>
 
-            {levels.length === 0 ? (
-              <div className="text-center text-gray-500 py-12">
-                <p>Belum ada level. Hubungi admin.</p>
-              </div>
+            {loading ? (
+              <div className="text-center py-12">Memuat level...</div>
+            ) : levels.length === 0 ? (
+              <div className="text-center text-gray-500 py-12">Belum ada level.</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {levels.map((level) => (
@@ -636,10 +650,9 @@ const CrosswordGame = () => {
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
+            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-indigo-600">
-                {currentLevel?.title}
-              </h2>
+              <h2 className="text-2xl font-bold text-indigo-600">{currentLevel?.title}</h2>
               <div className="flex gap-4 items-center">
                 <div className="flex items-center gap-2 text-gray-700">
                   <Lightbulb size={20} className="text-yellow-500" />
@@ -803,6 +816,7 @@ const CrosswordGame = () => {
       <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
+            {error && <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-bold text-indigo-600 flex items-center gap-3">
                 <Trophy className="text-yellow-500" size={36} />
@@ -816,30 +830,30 @@ const CrosswordGame = () => {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {leaderboard.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  className={`flex items-center gap-4 p-4 rounded-lg ${
-                    idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white' :
-                    idx === 1 ? 'bg-gray-200' :
-                    idx === 2 ? 'bg-orange-200' :
-                    'bg-gray-100'
-                  }`}
-                >
-                  <div className="text-2xl font-bold w-12 text-center">{idx + 1}</div>
-                  <div className="flex-1 font-bold">{entry.username}</div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold">{entry.total_correct}</div>
-                    <div className="text-sm text-gray-600">Jawaban Benar</div>
+            {loading ? (
+              <div className="text-center py-12">Memuat leaderboard...</div>
+            ) : leaderboard.length === 0 ? (
+              <div className="text-center text-gray-500 py-12">Belum ada data.</div>
+            ) : (
+              <div className="space-y-3">
+                {leaderboard.map((entry, idx) => (
+                  <div
+                    key={entry.id}
+                    className={`flex items-center gap-4 p-4 rounded-lg ${
+                      idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white' :
+                      idx === 1 ? 'bg-gray-200' :
+                      idx === 2 ? 'bg-orange-200' :
+                      'bg-gray-100'
+                    }`}
+                  >
+                    <div className="text-2xl font-bold w-12 text-center">{idx + 1}</div>
+                    <div className="flex-1 font-bold">{entry.username}</div>
+                    <div className="text-right">
+                      <div className="text-xl font-bold">{entry.total_correct}</div>
+                      <div className="text-sm text-gray-600">Jawaban Benar</div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            {leaderboard.length === 0 && (
-              <div className="text-center text-gray-500 py-12">
-                Belum ada data leaderboard.
+                ))}
               </div>
             )}
           </div>
