@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Puzzle extends Model
 {
     use HasFactory;
-    // public $timestamps = false;  // <— tambahkan ini
+    public $timestamps = false;  // <— tambahkan ini
 
     protected $fillable = [
         'title',
@@ -19,8 +19,6 @@ class Puzzle extends Model
     protected $casts = [
         'rows' => 'integer',
         'cols' => 'integer',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
     ];
 
     public function words()
