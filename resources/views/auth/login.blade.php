@@ -53,10 +53,10 @@
             </button>
         </form>
 
-        <p class="text-center text-gray-600 mt-4">
+        <!-- <p class="text-center text-gray-600 mt-4">
             Don't have an account? 
             <a href="{{ route('register') }}" class="text-indigo-600 hover:underline">Register</a>
-        </p>
+        </p> -->
     </div>
 </body>
 </html>
