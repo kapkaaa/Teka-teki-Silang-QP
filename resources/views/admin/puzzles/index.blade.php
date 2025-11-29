@@ -19,7 +19,6 @@
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-600">Title</th>
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-600">Size</th>
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-600">Words</th>
-                    <th class="px-6 py-3 text-left text-sm font-semibold text-gray-600">Created</th>
                     <th class="px-6 py-3 text-left text-sm font-semibold text-gray-600">Actions</th>
                 </tr>
             </thead>
@@ -34,7 +33,6 @@
                             {{ $puzzle->words_count }} words
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-gray-600">{{ $puzzle->created_at->format('M d, Y') }}</td>
                     <td class="px-6 py-4">
                         <div class="flex space-x-2">
                             <a href="{{ route('admin.puzzles.edit', $puzzle->id) }}" 
