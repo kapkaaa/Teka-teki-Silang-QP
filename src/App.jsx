@@ -22,7 +22,7 @@ import Leaderboard from './components/Leaderboard';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabasAnoneKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const CrosswordGame = () => {
   const [user, setUser] = useState(null);
