@@ -19,11 +19,8 @@ import Game from './components/Game';
 import Review from './components/Review';
 import Leaderboard from './components/Leaderboard';
 
-// 🔐 HANYA URL YANG BOLEH ADA DI FRONTEND
-// Supabase anon key TIDAK PERLU — client otomatis pakai session
-const supabaseUrl = 'https://xpdpbxzfxhixzmvcswsy.supabase.co';
-const supabasAnoneKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZHBieHpmeGhpeHptdmNzd3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2OTQwNTQsImV4cCI6MjA3OTI3MDA1NH0.2dpbe4Vk6PM1AY6PiIYGKmcZo5tcJxOD_4Jnras1mlg';
-// JANGAN SIMPAN supabaseKey DI SINI! Supabase client pakai session dari auth
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const supabase = createClient(supabaseUrl, supabasAnoneKey);
 
