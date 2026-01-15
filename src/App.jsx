@@ -297,7 +297,13 @@ const CrosswordGame = () => {
         !grid[nextRow]?.[nextCol]?.isBlack
       ) {
         setSelectedCell({ row: nextRow, col: nextCol });
-        setTimeout(() => gridRefs.current[`${nextRow}-${nextCol}`]?.focus(), 0);
+        setTimeout(() => {
+          const nextElement = gridRefs.current[`${nextRow}-${nextCol}`];
+          if (nextElement) {
+            nextElement.value = ''; // Kosongkan nilai sebelum fokus
+            nextElement.focus();
+          }
+        }, 0);
       }
     } else if (e.key === 'Backspace') {
       e.preventDefault();
@@ -315,7 +321,13 @@ const CrosswordGame = () => {
         !grid[prevRow]?.[prevCol]?.isBlack
       ) {
         setSelectedCell({ row: prevRow, col: prevCol });
-        setTimeout(() => gridRefs.current[`${prevRow}-${prevCol}`]?.focus(), 0);
+        setTimeout(() => {
+          const prevElement = gridRefs.current[`${prevRow}-${prevCol}`];
+          if (prevElement) {
+            prevElement.value = ''; // Kosongkan nilai sebelum fokus
+            prevElement.focus();
+          }
+        }, 0);
       }
     } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();
@@ -333,7 +345,13 @@ const CrosswordGame = () => {
         !grid[newRow]?.[newCol]?.isBlack
       ) {
         setSelectedCell({ row: newRow, col: newCol });
-        setTimeout(() => gridRefs.current[`${newRow}-${newCol}`]?.focus(), 0);
+        setTimeout(() => {
+          const nextElement = gridRefs.current[`${newRow}-${newCol}`];
+          if (nextElement) {
+            nextElement.value = ''; // Kosongkan nilai sebelum fokus
+            nextElement.focus();
+          }
+        }, 0);
       }
     }
   }, [direction, grid, userAnswers]);
