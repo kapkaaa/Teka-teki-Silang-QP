@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Trophy, Clock, User, LogOut, Play, RotateCcw, Lightbulb, Grid3x3 } from 'lucide-react';
 
 const Menu = ({ user, handleLogout, loadLevels, loadLeaderboard, error }) => {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const confirmLogout = () => {
+    handleLogout();
+    setShowLogoutModal(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
       <div className="max-w-4xl mx-auto">
@@ -15,7 +22,7 @@ const Menu = ({ user, handleLogout, loadLevels, loadLeaderboard, error }) => {
               </p>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
             >
               <LogOut size={18} /> Logout
@@ -41,6 +48,31 @@ const Menu = ({ user, handleLogout, loadLevels, loadLeaderboard, error }) => {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Konfirmasi Logout</h3>
+            <p className="text-gray-600 mb-6">Apakah Anda yakin ingin keluar dari akun Anda?</p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+              >
+                Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
