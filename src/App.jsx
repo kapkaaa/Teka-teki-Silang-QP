@@ -287,48 +287,12 @@ const CrosswordGame = () => {
       newAnswers[`${row}-${col}`] = e.key.toUpperCase();
       setUserAnswers(newAnswers);
 
-      let nextRow = row, nextCol = col;
-      if (direction === 'across') nextCol++;
-      else nextRow++;
-
-      if (
-        nextRow < grid.length &&
-        nextCol < grid[0]?.length &&
-        !grid[nextRow]?.[nextCol]?.isBlack
-      ) {
-        setSelectedCell({ row: nextRow, col: nextCol });
-        setTimeout(() => {
-          const nextElement = gridRefs.current[`${nextRow}-${nextCol}`];
-          if (nextElement) {
-            nextElement.value = ''; // Kosongkan nilai sebelum fokus
-            nextElement.focus();
-          }
-        }, 0);
-      }
+      // Jangan pindah otomatis di sini, biarkan pengguna yang memutuskan
     } else if (e.key === 'Backspace') {
       e.preventDefault();
       const newAnswers = { ...userAnswers };
       delete newAnswers[`${row}-${col}`];
       setUserAnswers(newAnswers);
-
-      let prevRow = row, prevCol = col;
-      if (direction === 'across') prevCol--;
-      else prevRow--;
-
-      if (
-        prevRow >= 0 &&
-        prevCol >= 0 &&
-        !grid[prevRow]?.[prevCol]?.isBlack
-      ) {
-        setSelectedCell({ row: prevRow, col: prevCol });
-        setTimeout(() => {
-          const prevElement = gridRefs.current[`${prevRow}-${prevCol}`];
-          if (prevElement) {
-            prevElement.value = ''; // Kosongkan nilai sebelum fokus
-            prevElement.focus();
-          }
-        }, 0);
-      }
     } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();
       let newRow = row, newCol = col;
@@ -345,13 +309,6 @@ const CrosswordGame = () => {
         !grid[newRow]?.[newCol]?.isBlack
       ) {
         setSelectedCell({ row: newRow, col: newCol });
-        setTimeout(() => {
-          const nextElement = gridRefs.current[`${newRow}-${newCol}`];
-          if (nextElement) {
-            nextElement.value = ''; // Kosongkan nilai sebelum fokus
-            nextElement.focus();
-          }
-        }, 0);
       }
     }
   }, [direction, grid, userAnswers]);
@@ -528,8 +485,11 @@ const CrosswordGame = () => {
       <Game
         grid={grid}
         userAnswers={userAnswers}
+        setUserAnswers={setUserAnswers}        // ✅ tambahkan ini
         selectedCell={selectedCell}
+        setSelectedCell={setSelectedCell}      // ✅ tambahkan ini
         direction={direction}
+        setDirection={setDirection}
         currentLevel={currentLevel}
         hintsUsed={hintsUsed}
         error={error}
