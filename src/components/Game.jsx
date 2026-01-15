@@ -30,25 +30,39 @@ const Game = ({
   // Fungsi untuk menangani input dari keyboard virtual
   const handleInput = (e, row, col) => {
     const value = e.target.value;
-    if (value.length === 1 && /[a-zA-Z]/.test(value)) {
-      const newAnswers = { ...userAnswers };
-      newAnswers[`${row}-${col}`] = value.toUpperCase();
-      setUserAnswers(newAnswers);
 
-      // Pindah ke kotak berikutnya
-      let nextRow = row, nextCol = col;
-      if (direction === 'across') nextCol++;
-      else nextRow++;
+    // Ambil karakter terakhir dari input (untuk kasus inputan langsung tanpa key-by-key)
+    if (value.length > 0) {
+      const char = value.slice(-1); // Ambil karakter terakhir
+      if (/[a-zA-Z]/.test(char)) {
+        const newAnswers = { ...userAnswers };
+        newAnswers[`${row}-${col}`] = char.toUpperCase();
+        setUserAnswers(newAnswers);
 
-      if (
-        nextRow < grid.length &&
-        nextCol < grid[0]?.length &&
-        !grid[nextRow]?.[nextCol]?.isBlack
-      ) {
-        setSelectedCell({ row: nextRow, col: nextCol });
-        setTimeout(() => gridRefs.current[`${nextRow}-${nextCol}`]?.focus(), 0);
+        // Kosongkan input field agar bisa menerima input berikutnya
+        e.target.value = char;
+
+        // Pindah ke kotak berikutnya
+        let nextRow = row, nextCol = col;
+        if (direction === 'across') nextCol++;
+        else nextRow++;
+
+        if (
+          nextRow < grid.length &&
+          nextCol < grid[0]?.length &&
+          !grid[nextRow]?.[nextCol]?.isBlack
+        ) {
+          setSelectedCell({ row: nextRow, col: nextCol });
+          setTimeout(() => {
+            const nextElement = gridRefs.current[`${nextRow}-${nextCol}`];
+            if (nextElement) {
+              nextElement.value = ''; // Kosongkan nilai sebelum fokus
+              nextElement.focus();
+            }
+          }, 0);
+        }
       }
-    } else if (value === '') {
+    } else {
       // Hapus jika kosong
       const newAnswers = { ...userAnswers };
       delete newAnswers[`${row}-${col}`];
