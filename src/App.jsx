@@ -280,6 +280,7 @@ const CrosswordGame = () => {
   const handleKeyDown = useCallback((e, row, col) => {
     if (!grid[row] || !grid[row][col] || grid[row][col].isBlack) return;
 
+    // Penanganan untuk keyboard fisik
     if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
       e.preventDefault();
       const newAnswers = { ...userAnswers };
