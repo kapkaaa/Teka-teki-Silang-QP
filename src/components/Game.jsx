@@ -134,55 +134,52 @@ const Game = ({
           <div className="grid grid-cols-1 gap-6">
             {/* Grid TTS */}
             <div className="overflow-x-auto">
-              <div className="bg-gray-100 p-2 sm:p-4 rounded-lg inline-block min-w-max">
-                {grid.map((row, rowIdx) => (
-                  <div key={rowIdx} className="flex">
-                    {row.map((cell, colIdx) => (
-                      <div key={`${rowIdx}-${colIdx}`} className="relative">
-                        {cell.isBlack ? (
-                          <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-800 border border-gray-900" />
-                        ) : (
-                          <div className="relative">
-                            {cell.number && (
-                              <div className="absolute top-0 left-0 text-[0.6rem] sm:text-xs font-bold text-indigo-600 pl-0.5 pt-0.5 z-10">
-                                {cell.number}
-                              </div>
-                            )}
-                            <input
-                              ref={(el) =>
-                                (gridRefs.current[`${rowIdx}-${colIdx}`] = el)
-                              }
-                              type="text"
-                              maxLength="1"
-                              value={userAnswers[`${rowIdx}-${colIdx}`] || ''}
-                              onChange={(e) => handleInput(e, rowIdx, colIdx)}
-                              onKeyDown={(e) =>
-                                handleKeyDown(e, rowIdx, colIdx)
-                              }
-                              onClick={() => handleCellClick(rowIdx, colIdx)}
-                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${
-                                selectedCell?.row === rowIdx &&
-                                selectedCell?.col === colIdx
-                                  ? 'border-blue-500 bg-blue-100'
-                                  : 'border-gray-300 hover:border-gray-400'
-                              } ${
-                                cell.acrossClue || cell.downClue
-                                  ? 'bg-white'
-                                  : 'bg-gray-50'
-                              }`}
-                              inputMode="text"
-                              autoComplete="off"
-                              autoCapitalize="characters"
-                              autoCorrect="off"
-                              spellCheck="false"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+            <div className="bg-gray-100 p-1 sm:p-2 rounded-lg inline-block min-w-max">
+              {grid.map((row, rowIdx) => (
+                <div key={rowIdx} className="flex">
+                  {row.map((cell, colIdx) => (
+                    <div key={`${rowIdx}-${colIdx}`} className="relative">
+                      {cell.isBlack ? (
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-800 border border-gray-900" />
+                      ) : (
+                        <div className="relative">
+                          {cell.number && (
+                            <div className="absolute top-0 left-0 text-[0.5rem] sm:text-[0.6rem] font-bold            text-indigo-600 pl-0.5 pt-0.5 z-10 leading-none">
+                              {cell.number}
+                            </div>
+                          )}
+                          <input
+                            ref={(el) =>
+                              (gridRefs.current[`${rowIdx}-${colIdx}`] = el)
+                            }
+                            type="text"
+                            maxLength="1"
+                            value={userAnswers[`${rowIdx}-${colIdx}`] || ''}
+                            onChange={(e) => handleInput(e, rowIdx, colIdx)}
+                            onKeyDown={(e) => handleKeyDown(e, rowIdx, colIdx)}
+                            onClick={() => handleCellClick(rowIdx, colIdx)}
+                            className={`w-6 h-6 sm:w-8 sm:h-8 border-2 text-center text-xs sm:text-sm             font-bold uppercase focus:outline-none ${
+                              selectedCell?.row === rowIdx && selectedCell?.col === colIdx
+                                ? 'border-blue-500 bg-blue-100'
+                                : 'border-gray-300 hover:border-gray-400'
+                            } ${
+                              cell.acrossClue || cell.downClue
+                                ? 'bg-white'
+                                : 'bg-gray-50'
+                            }`}
+                            inputMode="text"
+                            autoComplete="off"
+                            autoCapitalize="characters"
+                            autoCorrect="off"
+                            spellCheck="false"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
             </div>
 
             {/* Kontrol & Clue */}
