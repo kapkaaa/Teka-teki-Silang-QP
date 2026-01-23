@@ -47,14 +47,17 @@ const CrosswordGame = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [completedWords, setCompletedWords] = useState(new Set());
   const gridRefs = useRef({});
   const audioRef = useRef(null);
+  const successAudioRef = useRef(null);
 
   // Inisialisasi Audio
   useEffect(() => {
-    // Sesuaikan dengan file yang ada: /audio/bg-musix.mp3
     audioRef.current = new Audio('/audio/bg-music.mp3');
     audioRef.current.loop = true;
+
+    successAudioRef.current = new Audio('/audio/success.mp3');
 
     return () => {
       if (audioRef.current) {
@@ -69,7 +72,45 @@ const CrosswordGame = () => {
     if (audioRef.current) {
       audioRef.current.muted = isMuted;
     }
+    if (successAudioRef.current) {
+      successAudioRef.current.muted = isMuted;
+    }
   }, [isMuted]);
+
+  // Cek kata yang baru saja selesai
+  useEffect(() => {
+    if (questions.length === 0) return;
+
+    questions.forEach(q => {
+      if (completedWords.has(q.id)) return;
+
+      let userWord = '';
+      for (let i = 0; i < q.answer.length; i++) {
+        const row = q.direction === 'down' ? q.position_y + i : q.position_y;
+        const col = q.direction === 'across' ? q.position_x + i : q.position_x;
+        userWord += userAnswers[`${row}-${col}`] || '';
+      }
+
+      if (userWord.toUpperCase() === q.answer.toUpperCase()) {
+        // Kata baru saja selesai dan benar
+        setCompletedWords(prev => new Set([...prev, q.id]));
+
+        // Ducking: Turunkan volume BGM agar SFX terdengar jelas
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.2;
+          setTimeout(() => {
+            if (audioRef.current) audioRef.current.volume = 1.0;
+          }, 2000);
+        }
+
+        // Putar suara success
+        if (successAudioRef.current) {
+          successAudioRef.current.currentTime = 0;
+          successAudioRef.current.play().catch(e => console.log("Sound effect blocked", e));
+        }
+      }
+    });
+  }, [userAnswers, questions, completedWords]);
 
   // Cek user saat mount
   useEffect(() => {
@@ -288,6 +329,7 @@ const CrosswordGame = () => {
       setGrid(grid);
       setCurrentLevel(level);
       setUserAnswers({});
+      setCompletedWords(new Set());
       setHintsUsed(0);
       setStartTime(new Date());
       setEndTime(null);
@@ -612,6 +654,7 @@ const CrosswordGame = () => {
           useHint={useHint}
           submitGame={submitGame}
           questions={questions}
+          completedWords={Array.from(completedWords)}
           setPage={setPage}
         />
       )}

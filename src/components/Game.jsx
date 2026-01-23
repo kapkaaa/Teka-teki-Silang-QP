@@ -27,6 +27,7 @@ const Game = ({
   useHint,
   submitGame,
   questions,
+  completedWords = [], // Array ID kata yang sudah benar
   setPage
 }) => {
   // Fokus pada sel terpilih saat berubah
@@ -38,6 +39,18 @@ const Game = ({
       }
     }
   }, [selectedCell, gridRefs]);
+
+  // Cek apakah sel ini bagian dari kata yang sudah selesai
+  const isCellInCompletedWord = (row, col) => {
+    return questions.some(q => {
+      if (!completedWords.includes(q.id)) return false;
+      if (q.direction === 'across') {
+        return row === q.position_y && col >= q.position_x && col < q.position_x + q.answer.length;
+      } else {
+        return col === q.position_x && row >= q.position_y && row < q.position_y + q.answer.length;
+      }
+    });
+  };
 
   // Tangani input dari keyboard (fisik atau virtual)
   const handleInput = (e, row, col) => {
@@ -107,49 +120,63 @@ const Game = ({
               <div className="bg-gray-100 p-2 sm:p-4 rounded-lg inline-block min-w-max">
                 {grid.map((row, rowIdx) => (
                   <div key={rowIdx} className="flex">
-                    {row.map((cell, colIdx) => (
-                      <div key={`${rowIdx}-${colIdx}`} className="relative">
-                        {cell.isBlack ? (
-                          <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-800 border border-gray-900" />
-                        ) : (
-                          <div className="relative">
-                            {cell.number && (
-                              <div className="absolute top-0 left-0 text-[0.6rem] sm:text-xs font-bold text-indigo-600 pl-0.5 pt-0.5 z-10">
-                                {cell.number}
-                              </div>
-                            )}
-                            <input
-                              ref={(el) =>
-                                (gridRefs.current[`${rowIdx}-${colIdx}`] = el)
-                              }
-                              type="text"
-                              maxLength="1"
-                              value={userAnswers[`${rowIdx}-${colIdx}`] || ''}
-                              onChange={(e) => handleInput(e, rowIdx, colIdx)}
-                              onKeyDown={(e) =>
-                                handleKeyDown(e, rowIdx, colIdx)
-                              }
-                              onClick={() => handleCellClick(rowIdx, colIdx)}
-                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${selectedCell?.row === rowIdx &&
+                    {row.map((cell, colIdx) => {
+                      const isSuccess = isCellInCompletedWord(rowIdx, colIdx);
+                      return (
+                        <div key={`${rowIdx}-${colIdx}`} className="relative">
+                          {cell.isBlack ? (
+                            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gray-800 border border-gray-900" />
+                          ) : (
+                            <div className={`relative ${isSuccess ? 'animate-cell-success' : ''}`}>
+                              {cell.number && (
+                                <div className="absolute top-0 left-0 text-[0.6rem] sm:text-xs font-bold text-indigo-600 pl-0.5 pt-0.5 z-10">
+                                  {cell.number}
+                                </div>
+                              )}
+
+                              {/* Sparkles Effect */}
+                              {isSuccess && (
+                                <>
+                                  <div className="sparkle" style={{ top: '-10%', left: '10%', animationDelay: '0s' }} />
+                                  <div className="sparkle" style={{ top: '20%', left: '90%', animationDelay: '0.1s' }} />
+                                  <div className="sparkle" style={{ top: '80%', left: '30%', animationDelay: '0.2s' }} />
+                                  <div className="sparkle" style={{ top: '50%', left: '70%', animationDelay: '0.3s' }} />
+                                </>
+                              )}
+
+                              <input
+                                ref={(el) =>
+                                  (gridRefs.current[`${rowIdx}-${colIdx}`] = el)
+                                }
+                                type="text"
+                                maxLength="1"
+                                value={userAnswers[`${rowIdx}-${colIdx}`] || ''}
+                                onChange={(e) => handleInput(e, rowIdx, colIdx)}
+                                onKeyDown={(e) =>
+                                  handleKeyDown(e, rowIdx, colIdx)
+                                }
+                                onClick={() => handleCellClick(rowIdx, colIdx)}
+                                className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none transition-all duration-300 ${selectedCell?.row === rowIdx &&
                                   selectedCell?.col === colIdx
                                   ? 'border-blue-500 bg-blue-100'
                                   : 'border-gray-300 hover:border-gray-400'
-                                } ${!userAnswers[`${rowIdx}-${colIdx}`]
-                                  ? (cell.acrossClue || cell.downClue ? 'bg-white' : 'bg-gray-50')
-                                  : userAnswers[`${rowIdx}-${colIdx}`].toUpperCase() === cell.letter.toUpperCase()
-                                    ? 'bg-green-500 text-white border-green-600'
-                                    : 'bg-red-500 text-white border-red-600'
-                                }`}
-                              inputMode="text"
-                              autoComplete="off"
-                              autoCapitalize="characters"
-                              autoCorrect="off"
-                              spellCheck="false"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                                  } ${!userAnswers[`${rowIdx}-${colIdx}`]
+                                    ? (cell.acrossClue || cell.downClue ? 'bg-white' : 'bg-gray-50')
+                                    : userAnswers[`${rowIdx}-${colIdx}`].toUpperCase() === cell.letter.toUpperCase()
+                                      ? 'bg-green-500 text-white border-green-600'
+                                      : 'bg-red-500 text-white border-red-600'
+                                  }`}
+                                inputMode="text"
+                                autoComplete="off"
+                                autoCapitalize="characters"
+                                autoCorrect="off"
+                                spellCheck="false"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
