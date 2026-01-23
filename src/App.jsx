@@ -461,15 +461,16 @@ const CrosswordGame = () => {
 
     const endTimeObj = new Date();
     setEndTime(endTimeObj);
-    const duration = Math.floor((endTimeObj - startTime) / 1000);
+    const durationCount = Math.floor((endTimeObj - startTime) / 1000);
     let correctWords = 0;
     const userAnswersList = [];
 
-    for (const q of questions) {
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
       let userWord = '';
-      for (let i = 0; i < q.answer.length; i++) {
-        const row = q.direction === 'down' ? q.position_y + i : q.position_y;
-        const col = q.direction === 'across' ? q.position_x + i : q.position_x;
+      for (let j = 0; j < q.answer.length; j++) {
+        const row = q.direction === 'down' ? q.position_y + j : q.position_y;
+        const col = q.direction === 'across' ? q.position_x + j : q.position_x;
         userWord += userAnswers[`${row}-${col}`] || '';
       }
 
@@ -481,6 +482,8 @@ const CrosswordGame = () => {
         word_id: q.id,
         answer: userWord,
         is_correct: isCorrect,
+        // Hanya simpan durasi di baris pertama agar tidak ter-akumulasi (dikalikan jumlah soal) di View SQL
+        duration: i === 0 ? durationCount : 0
       });
     }
 
@@ -499,7 +502,7 @@ const CrosswordGame = () => {
       // Ambil dari view yang sudah di-aggregasi
       const { data, error } = await supabase
         .from('leaderboard_view')
-        .select('username, total_correct')
+        .select('username, total_correct, total_duration') // Ambil total_duration
         .limit(10); // Ambil top 10
 
       if (error) throw error;
@@ -508,7 +511,8 @@ const CrosswordGame = () => {
       const leaderboardData = data.map((item, idx) => ({
         id: idx,
         username: item.username || 'Anonymous',
-        total_correct: item.total_correct || 0
+        total_correct: item.total_correct || 0,
+        total_duration: item.total_duration || 0 // Pasang ke state
       }));
 
       setLeaderboard(leaderboardData);
