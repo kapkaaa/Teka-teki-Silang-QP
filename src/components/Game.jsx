@@ -41,52 +41,22 @@ const Game = ({
 
   // Tangani input dari keyboard (fisik atau virtual)
   const handleInput = (e, row, col) => {
-    let char = e.target.value.toUpperCase();
+    const val = e.target.value.toUpperCase();
 
     // Hanya izinkan satu huruf A-Z
-    if (char && !/^[A-Z]$/.test(char)) {
-      // Reset input jika karakter tidak valid
+    if (val && !/^[A-Z]$/.test(val)) {
       e.target.value = userAnswers[`${row}-${col}`] || '';
       return;
     }
 
-    // Simpan ke state
-    setUserAnswers(prev => ({
-      ...prev,
-      [`${row}-${col}`]: char
-    }));
-
-    // Jika input valid dan selesai, pindah ke sel berikutnya
-    if (char) {
-      setTimeout(() => handleInputComplete(row, col), 0);
-    }
-  };
-
-  // Pindah ke sel berikutnya setelah input
-  const handleInputComplete = (row, col) => {
-    let nextRow = row;
-    let nextCol = col;
-
-    if (direction === 'across') {
-      nextCol++;
-    } else {
-      nextRow++;
-    }
-
-    // Cek apakah sel berikutnya valid
-    if (
-      nextRow >= 0 &&
-      nextCol >= 0 &&
-      nextRow < grid.length &&
-      nextCol < (grid[nextRow]?.length || 0) &&
-      !grid[nextRow]?.[nextCol]?.isBlack
-    ) {
-      setSelectedCell({ row: nextRow, col: nextCol });
-      // Fokus setelah state update
-      setTimeout(() => {
-        const nextElement = gridRefs.current?.[`${nextRow}-${nextCol}`];
-        if (nextElement) nextElement.focus();
-      }, 0);
+    if (val) {
+      // Panggil handleKeyDown agar logic auto-advance di App.jsx jalan
+      // Kita kirim event minimalis yang dibutuhkan
+      handleKeyDown({
+        key: val,
+        preventDefault: () => { },
+        target: e.target
+      }, row, col);
     }
   };
 
@@ -160,16 +130,14 @@ const Game = ({
                                 handleKeyDown(e, rowIdx, colIdx)
                               }
                               onClick={() => handleCellClick(rowIdx, colIdx)}
-                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${
-                                selectedCell?.row === rowIdx &&
+                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${selectedCell?.row === rowIdx &&
                                 selectedCell?.col === colIdx
-                                  ? 'border-blue-500 bg-blue-100'
-                                  : 'border-gray-300 hover:border-gray-400'
-                              } ${
-                                cell.acrossClue || cell.downClue
+                                ? 'border-blue-500 bg-blue-100'
+                                : 'border-gray-300 hover:border-gray-400'
+                                } ${cell.acrossClue || cell.downClue
                                   ? 'bg-white'
                                   : 'bg-gray-50'
-                              }`}
+                                }`}
                               inputMode="text"
                               autoComplete="off"
                               autoCapitalize="characters"
@@ -188,16 +156,6 @@ const Game = ({
             {/* Kontrol & Clue */}
             <div className="space-y-4">
               <div className="bg-gray-50 p-4 sm:p-6 rounded-xl">
-                <h3 className="text-lg sm:text-xl font-bold text-indigo-600 mb-3 sm:mb-4">
-                  Arah: {direction === 'across' ? 'Horizontal' : 'Vertikal'}
-                </h3>
-                <button
-                  onClick={toggleDirection}
-                  className="w-full px-3 py-2 sm:px-4 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition mb-3 sm:mb-4 text-sm sm:text-base"
-                >
-                  Ganti Arah ({direction === 'across' ? 'Vertikal' : 'Horizontal'})
-                </button>
-
                 <button
                   onClick={submitGame}
                   className="w-full px-3 py-2 sm:px-4 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm sm:text-base"
@@ -238,11 +196,10 @@ const Game = ({
                       return (
                         <div
                           key={q.id}
-                          className={`p-2 sm:p-3 rounded-lg border text-xs sm:text-sm ${
-                            isCorrect
-                              ? 'bg-green-100 border-green-500'
-                              : 'bg-white border-gray-300'
-                          }`}
+                          className={`p-2 sm:p-3 rounded-lg border text-xs sm:text-sm ${isCorrect
+                            ? 'bg-green-100 border-green-500'
+                            : 'bg-white border-gray-300'
+                            }`}
                         >
                           <div className="font-bold">
                             {q.number}. {q.clue}
@@ -279,11 +236,10 @@ const Game = ({
                       return (
                         <div
                           key={q.id}
-                          className={`p-2 sm:p-3 rounded-lg border text-xs sm:text-sm ${
-                            isCorrect
-                              ? 'bg-green-100 border-green-500'
-                              : 'bg-white border-gray-300'
-                          }`}
+                          className={`p-2 sm:p-3 rounded-lg border text-xs sm:text-sm ${isCorrect
+                            ? 'bg-green-100 border-green-500'
+                            : 'bg-white border-gray-300'
+                            }`}
                         >
                           <div className="font-bold">
                             {q.number}. {q.clue}

@@ -231,6 +231,11 @@ const CrosswordGame = () => {
           if (row < level.rows && col < level.cols) {
             usedCells.add(`${row}-${col}`);
             grid[row][col].letter = q.answer[i];
+
+            // Tandai kemampuan arah sel ini
+            if (q.direction === 'across') grid[row][col].canAcross = true;
+            if (q.direction === 'down') grid[row][col].canDown = true;
+
             if (i === 0) {
               grid[row][col].number = q.number;
               if (q.direction === 'across') grid[row][col].acrossClue = q.id;
@@ -268,32 +273,111 @@ const CrosswordGame = () => {
   };
 
   const handleCellClick = (row, col) => {
-    if (grid[row]?.[col]?.isBlack) return;
+    const cell = grid[row]?.[col];
+    if (!cell || cell.isBlack) return;
 
+    // Jika sudah terpilih di sel yang sama, toggle arah jika memungkinkan
     if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
-      setDirection(prev => prev === 'across' ? 'down' : 'across');
+      if (cell.canAcross && cell.canDown) {
+        setDirection(prev => prev === 'across' ? 'down' : 'across');
+      }
     } else {
       setSelectedCell({ row, col });
+
+      // Pilih arah otomatis:
+      // 1. Jika hanya bisa across, set across
+      // 2. Jika hanya bisa down, set down
+      // 3. Jika bisa keduanya, pertahankan arah saat ini jika valid untuk sel ini, 
+      //    jika tidak valid pertahankan prioritas (karena crosswords biasanya default across atau disesuaikan)
+      if (cell.canAcross && !cell.canDown) {
+        setDirection('across');
+      } else if (!cell.canAcross && cell.canDown) {
+        setDirection('down');
+      } else if (cell.canAcross && cell.canDown) {
+        // Jika arah saat ini tidak didukung oleh sel baru, switch ke yang didukung
+        if (direction === 'across' && !cell.canAcross) setDirection('down');
+        if (direction === 'down' && !cell.canDown) setDirection('across');
+      }
     }
+  };
+
+  const moveToNextCell = (row, col, dir) => {
+    let newRow = row;
+    let newCol = col;
+    if (dir === 'across') newCol++;
+    else newRow++;
+
+    if (
+      newRow >= 0 &&
+      newRow < grid.length &&
+      newCol >= 0 &&
+      newCol < (grid[0]?.length || 0) &&
+      !grid[newRow]?.[newCol]?.isBlack
+    ) {
+      setSelectedCell({ row: newRow, col: newCol });
+      return true;
+    }
+    return false;
+  };
+
+  const moveToPrevCell = (row, col, dir) => {
+    let newRow = row;
+    let newCol = col;
+    if (dir === 'across') newCol--;
+    else newRow--;
+
+    if (
+      newRow >= 0 &&
+      newRow < grid.length &&
+      newCol >= 0 &&
+      newCol < (grid[0]?.length || 0) &&
+      !grid[newRow]?.[newCol]?.isBlack
+    ) {
+      setSelectedCell({ row: newRow, col: newCol });
+      return { row: newRow, col: newCol };
+    }
+    return null;
   };
 
   const handleKeyDown = useCallback((e, row, col) => {
     if (!grid[row] || !grid[row][col] || grid[row][col].isBlack) return;
 
-    // Penanganan untuk keyboard fisik
+    // A-Z Input
     if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
       e.preventDefault();
-      const newAnswers = { ...userAnswers };
-      newAnswers[`${row}-${col}`] = e.key.toUpperCase();
-      setUserAnswers(newAnswers);
-
-      // Jangan pindah otomatis di sini, biarkan pengguna yang memutuskan
-    } else if (e.key === 'Backspace') {
+      const val = e.key.toUpperCase();
+      setUserAnswers(prev => ({
+        ...prev,
+        [`${row}-${col}`]: val
+      }));
+      moveToNextCell(row, col, direction);
+    }
+    // Backspace
+    else if (e.key === 'Backspace') {
       e.preventDefault();
-      const newAnswers = { ...userAnswers };
-      delete newAnswers[`${row}-${col}`];
-      setUserAnswers(newAnswers);
-    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      const currentVal = userAnswers[`${row}-${col}`];
+
+      if (currentVal) {
+        // Jika sel berisi, hapus isinya saja
+        setUserAnswers(prev => {
+          const next = { ...prev };
+          delete next[`${row}-${col}`];
+          return next;
+        });
+      } else {
+        // Jika sel kosong, pindah ke sebelumnya dan hapus
+        const prevPos = moveToPrevCell(row, col, direction);
+        if (prevPos) {
+          setUserAnswers(prev => {
+            const next = { ...prev };
+            delete next[`${prevPos.row}-${prevPos.col}`];
+            return next;
+          });
+        }
+      }
+    }
+    // Arrow Keys
+    else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();
       let newRow = row, newCol = col;
       if (e.key === 'ArrowRight') newCol++;
@@ -305,7 +389,7 @@ const CrosswordGame = () => {
         newRow >= 0 &&
         newRow < grid.length &&
         newCol >= 0 &&
-        newCol < grid[0]?.length &&
+        newCol < (grid[0]?.length || 0) &&
         !grid[newRow]?.[newCol]?.isBlack
       ) {
         setSelectedCell({ row: newRow, col: newCol });
