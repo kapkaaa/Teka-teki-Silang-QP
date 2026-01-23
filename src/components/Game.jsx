@@ -130,16 +130,16 @@ const Game = ({
                                 handleKeyDown(e, rowIdx, colIdx)
                               }
                               onClick={() => handleCellClick(rowIdx, colIdx)}
-                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${
-                                selectedCell?.row === rowIdx &&
-                                selectedCell?.col === colIdx
+                              className={`w-8 h-8 sm:w-12 sm:h-12 border-2 text-center text-base sm:text-xl font-bold uppercase focus:outline-none ${selectedCell?.row === rowIdx &&
+                                  selectedCell?.col === colIdx
                                   ? 'border-blue-500 bg-blue-100'
                                   : 'border-gray-300 hover:border-gray-400'
-                              } ${
-                                cell.acrossClue || cell.downClue
-                                  ? 'bg-white'
-                                  : 'bg-gray-50'
-                              }`}
+                                } ${!userAnswers[`${rowIdx}-${colIdx}`]
+                                  ? (cell.acrossClue || cell.downClue ? 'bg-white' : 'bg-gray-50')
+                                  : userAnswers[`${rowIdx}-${colIdx}`].toUpperCase() === cell.letter.toUpperCase()
+                                    ? 'bg-green-500 text-white border-green-600'
+                                    : 'bg-red-500 text-white border-red-600'
+                                }`}
                               inputMode="text"
                               autoComplete="off"
                               autoCapitalize="characters"
