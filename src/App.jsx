@@ -9,6 +9,8 @@ import {
   RotateCcw,
   Lightbulb,
   Grid3x3,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 // Components
@@ -44,7 +46,30 @@ const CrosswordGame = () => {
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const gridRefs = useRef({});
+  const audioRef = useRef(null);
+
+  // Inisialisasi Audio
+  useEffect(() => {
+    // Sesuaikan dengan file yang ada: /audio/bg-musix.mp3
+    audioRef.current = new Audio('/audio/bg-music.mp3');
+    audioRef.current.loop = true;
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Sinkronisasi Mute
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   // Cek user saat mount
   useEffect(() => {
@@ -109,6 +134,11 @@ const CrosswordGame = () => {
 
         setUser(userData);
         setPage('menu');
+
+        // Putar musik setelah login berhasil
+        if (audioRef.current) {
+          audioRef.current.play().catch(err => console.log("Autoplay blocked:", err));
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -527,97 +557,98 @@ const CrosswordGame = () => {
 
   // === RENDERING ===
 
-  if (page === 'login') {
-    return (
-      <Login
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-        registerForm={registerForm}
-        setRegisterForm={setRegisterForm}
-        isRegister={isRegister}
-        setIsRegister={setIsRegister}
-        handleLogin={handleLogin}
-        handleRegister={handleRegister}
-        error={error}
-        loading={loading}
-      />
-    );
-  }
+  return (
+    <>
+      {page === 'login' && (
+        <Login
+          loginForm={loginForm}
+          setLoginForm={setLoginForm}
+          registerForm={registerForm}
+          setRegisterForm={setRegisterForm}
+          isRegister={isRegister}
+          setIsRegister={setIsRegister}
+          handleLogin={handleLogin}
+          handleRegister={handleRegister}
+          error={error}
+          loading={loading}
+        />
+      )}
 
-  if (page === 'menu') {
-    return (
-      <Menu
-        user={user}
-        handleLogout={handleLogout}
-        loadLevels={loadLevels}
-        loadLeaderboard={loadLeaderboard}
-        error={error}
-      />
-    );
-  }
+      {page === 'menu' && (
+        <Menu
+          user={user}
+          handleLogout={handleLogout}
+          loadLevels={loadLevels}
+          loadLeaderboard={loadLeaderboard}
+          error={error}
+        />
+      )}
 
-  if (page === 'levels') {
-    return (
-      <Levels
-        levels={levels}
-        startLevel={startLevel}
-        loading={loading}
-        error={error}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'levels' && (
+        <Levels
+          levels={levels}
+          startLevel={startLevel}
+          loading={loading}
+          error={error}
+          setPage={setPage}
+        />
+      )}
 
-  if (page === 'game' && !showReview) {
-    return (
-      <Game
-        grid={grid}
-        userAnswers={userAnswers}
-        setUserAnswers={setUserAnswers}        // ✅ tambahkan ini
-        selectedCell={selectedCell}
-        setSelectedCell={setSelectedCell}      // ✅ tambahkan ini
-        direction={direction}
-        setDirection={setDirection}
-        currentLevel={currentLevel}
-        hintsUsed={hintsUsed}
-        error={error}
-        gridRefs={gridRefs}
-        handleKeyDown={handleKeyDown}
-        handleCellClick={handleCellClick}
-        useHint={useHint}
-        submitGame={submitGame}
-        questions={questions}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'game' && !showReview && (
+        <Game
+          grid={grid}
+          userAnswers={userAnswers}
+          setUserAnswers={setUserAnswers}
+          selectedCell={selectedCell}
+          setSelectedCell={setSelectedCell}
+          direction={direction}
+          setDirection={setDirection}
+          currentLevel={currentLevel}
+          hintsUsed={hintsUsed}
+          error={error}
+          gridRefs={gridRefs}
+          handleKeyDown={handleKeyDown}
+          handleCellClick={handleCellClick}
+          useHint={useHint}
+          submitGame={submitGame}
+          questions={questions}
+          setPage={setPage}
+        />
+      )}
 
-  if (page === 'game' && showReview) {
-    return (
-      <Review
-        questions={questions}
-        userAnswers={userAnswers}
-        startTime={startTime}
-        endTime={endTime}
-        currentLevel={currentLevel}
-        setPage={setPage}
-        startLevel={startLevel}
-      />
-    );
-  }
+      {page === 'game' && showReview && (
+        <Review
+          questions={questions}
+          userAnswers={userAnswers}
+          startTime={startTime}
+          endTime={endTime}
+          currentLevel={currentLevel}
+          setPage={setPage}
+          startLevel={startLevel}
+        />
+      )}
 
-  if (page === 'leaderboard') {
-    return (
-      <Leaderboard
-        leaderboard={leaderboard}
-        loading={loading}
-        error={error}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'leaderboard' && (
+        <Leaderboard
+          leaderboard={leaderboard}
+          loading={loading}
+          error={error}
+          setPage={setPage}
+        />
+      )}
 
-  return null;
+      {/* Floating Music Toggle */}
+      {user && (
+        <button
+          onClick={() => setIsMuted(!isMuted)}
+          className="fixed bottom-6 right-6 p-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-full shadow-lg hover:bg-white/30 transition-all z-50 text-white"
+          title={isMuted ? "Unmute Musik" : "Mute Musik"}
+        >
+          {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+        </button>
+      )}
+    </>
+  );
 };
 
 export default CrosswordGame;
