@@ -9,6 +9,8 @@ import {
   RotateCcw,
   Lightbulb,
   Grid3x3,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 // Components
@@ -44,7 +46,30 @@ const CrosswordGame = () => {
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const gridRefs = useRef({});
+  const audioRef = useRef(null);
+
+  // Inisialisasi Audio
+  useEffect(() => {
+    // Sesuaikan dengan file yang ada: /audio/bg-musix.mp3
+    audioRef.current = new Audio('/audio/bg-music.mp3');
+    audioRef.current.loop = true;
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Sinkronisasi Mute
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   // Cek user saat mount
   useEffect(() => {
@@ -109,6 +134,11 @@ const CrosswordGame = () => {
 
         setUser(userData);
         setPage('menu');
+
+        // Putar musik setelah login berhasil
+        if (audioRef.current) {
+          audioRef.current.play().catch(err => console.log("Autoplay blocked:", err));
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -231,6 +261,11 @@ const CrosswordGame = () => {
           if (row < level.rows && col < level.cols) {
             usedCells.add(`${row}-${col}`);
             grid[row][col].letter = q.answer[i];
+
+            // Tandai kemampuan arah sel ini
+            if (q.direction === 'across') grid[row][col].canAcross = true;
+            if (q.direction === 'down') grid[row][col].canDown = true;
+
             if (i === 0) {
               grid[row][col].number = q.number;
               if (q.direction === 'across') grid[row][col].acrossClue = q.id;
@@ -268,32 +303,111 @@ const CrosswordGame = () => {
   };
 
   const handleCellClick = (row, col) => {
-    if (grid[row]?.[col]?.isBlack) return;
+    const cell = grid[row]?.[col];
+    if (!cell || cell.isBlack) return;
 
+    // Jika sudah terpilih di sel yang sama, toggle arah jika memungkinkan
     if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
-      setDirection(prev => prev === 'across' ? 'down' : 'across');
+      if (cell.canAcross && cell.canDown) {
+        setDirection(prev => prev === 'across' ? 'down' : 'across');
+      }
     } else {
       setSelectedCell({ row, col });
+
+      // Pilih arah otomatis:
+      // 1. Jika hanya bisa across, set across
+      // 2. Jika hanya bisa down, set down
+      // 3. Jika bisa keduanya, pertahankan arah saat ini jika valid untuk sel ini, 
+      //    jika tidak valid pertahankan prioritas (karena crosswords biasanya default across atau disesuaikan)
+      if (cell.canAcross && !cell.canDown) {
+        setDirection('across');
+      } else if (!cell.canAcross && cell.canDown) {
+        setDirection('down');
+      } else if (cell.canAcross && cell.canDown) {
+        // Jika arah saat ini tidak didukung oleh sel baru, switch ke yang didukung
+        if (direction === 'across' && !cell.canAcross) setDirection('down');
+        if (direction === 'down' && !cell.canDown) setDirection('across');
+      }
     }
+  };
+
+  const moveToNextCell = (row, col, dir) => {
+    let newRow = row;
+    let newCol = col;
+    if (dir === 'across') newCol++;
+    else newRow++;
+
+    if (
+      newRow >= 0 &&
+      newRow < grid.length &&
+      newCol >= 0 &&
+      newCol < (grid[0]?.length || 0) &&
+      !grid[newRow]?.[newCol]?.isBlack
+    ) {
+      setSelectedCell({ row: newRow, col: newCol });
+      return true;
+    }
+    return false;
+  };
+
+  const moveToPrevCell = (row, col, dir) => {
+    let newRow = row;
+    let newCol = col;
+    if (dir === 'across') newCol--;
+    else newRow--;
+
+    if (
+      newRow >= 0 &&
+      newRow < grid.length &&
+      newCol >= 0 &&
+      newCol < (grid[0]?.length || 0) &&
+      !grid[newRow]?.[newCol]?.isBlack
+    ) {
+      setSelectedCell({ row: newRow, col: newCol });
+      return { row: newRow, col: newCol };
+    }
+    return null;
   };
 
   const handleKeyDown = useCallback((e, row, col) => {
     if (!grid[row] || !grid[row][col] || grid[row][col].isBlack) return;
 
-    // Penanganan untuk keyboard fisik
+    // A-Z Input
     if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
       e.preventDefault();
-      const newAnswers = { ...userAnswers };
-      newAnswers[`${row}-${col}`] = e.key.toUpperCase();
-      setUserAnswers(newAnswers);
-
-      // Jangan pindah otomatis di sini, biarkan pengguna yang memutuskan
-    } else if (e.key === 'Backspace') {
+      const val = e.key.toUpperCase();
+      setUserAnswers(prev => ({
+        ...prev,
+        [`${row}-${col}`]: val
+      }));
+      moveToNextCell(row, col, direction);
+    }
+    // Backspace
+    else if (e.key === 'Backspace') {
       e.preventDefault();
-      const newAnswers = { ...userAnswers };
-      delete newAnswers[`${row}-${col}`];
-      setUserAnswers(newAnswers);
-    } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      const currentVal = userAnswers[`${row}-${col}`];
+
+      if (currentVal) {
+        // Jika sel berisi, hapus isinya saja
+        setUserAnswers(prev => {
+          const next = { ...prev };
+          delete next[`${row}-${col}`];
+          return next;
+        });
+      } else {
+        // Jika sel kosong, pindah ke sebelumnya dan hapus
+        const prevPos = moveToPrevCell(row, col, direction);
+        if (prevPos) {
+          setUserAnswers(prev => {
+            const next = { ...prev };
+            delete next[`${prevPos.row}-${prevPos.col}`];
+            return next;
+          });
+        }
+      }
+    }
+    // Arrow Keys
+    else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       e.preventDefault();
       let newRow = row, newCol = col;
       if (e.key === 'ArrowRight') newCol++;
@@ -305,7 +419,7 @@ const CrosswordGame = () => {
         newRow >= 0 &&
         newRow < grid.length &&
         newCol >= 0 &&
-        newCol < grid[0]?.length &&
+        newCol < (grid[0]?.length || 0) &&
         !grid[newRow]?.[newCol]?.isBlack
       ) {
         setSelectedCell({ row: newRow, col: newCol });
@@ -377,15 +491,16 @@ const CrosswordGame = () => {
 
     const endTimeObj = new Date();
     setEndTime(endTimeObj);
-    const duration = Math.floor((endTimeObj - startTime) / 1000);
+    const durationCount = Math.floor((endTimeObj - startTime) / 1000);
     let correctWords = 0;
     const userAnswersList = [];
 
-    for (const q of questions) {
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
       let userWord = '';
-      for (let i = 0; i < q.answer.length; i++) {
-        const row = q.direction === 'down' ? q.position_y + i : q.position_y;
-        const col = q.direction === 'across' ? q.position_x + i : q.position_x;
+      for (let j = 0; j < q.answer.length; j++) {
+        const row = q.direction === 'down' ? q.position_y + j : q.position_y;
+        const col = q.direction === 'across' ? q.position_x + j : q.position_x;
         userWord += userAnswers[`${row}-${col}`] || '';
       }
 
@@ -397,6 +512,8 @@ const CrosswordGame = () => {
         word_id: q.id,
         answer: userWord,
         is_correct: isCorrect,
+        // Hanya simpan durasi di baris pertama agar tidak ter-akumulasi (dikalikan jumlah soal) di View SQL
+        duration: i === 0 ? durationCount : 0
       });
     }
 
@@ -415,7 +532,7 @@ const CrosswordGame = () => {
       // Ambil dari view yang sudah di-aggregasi
       const { data, error } = await supabase
         .from('leaderboard_view')
-        .select('username, total_correct')
+        .select('username, total_correct, total_duration') // Ambil total_duration
         .limit(10); // Ambil top 10
 
       if (error) throw error;
@@ -424,7 +541,8 @@ const CrosswordGame = () => {
       const leaderboardData = data.map((item, idx) => ({
         id: idx,
         username: item.username || 'Anonymous',
-        total_correct: item.total_correct || 0
+        total_correct: item.total_correct || 0,
+        total_duration: item.total_duration || 0 // Pasang ke state
       }));
 
       setLeaderboard(leaderboardData);
@@ -439,97 +557,98 @@ const CrosswordGame = () => {
 
   // === RENDERING ===
 
-  if (page === 'login') {
-    return (
-      <Login
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-        registerForm={registerForm}
-        setRegisterForm={setRegisterForm}
-        isRegister={isRegister}
-        setIsRegister={setIsRegister}
-        handleLogin={handleLogin}
-        handleRegister={handleRegister}
-        error={error}
-        loading={loading}
-      />
-    );
-  }
+  return (
+    <>
+      {page === 'login' && (
+        <Login
+          loginForm={loginForm}
+          setLoginForm={setLoginForm}
+          registerForm={registerForm}
+          setRegisterForm={setRegisterForm}
+          isRegister={isRegister}
+          setIsRegister={setIsRegister}
+          handleLogin={handleLogin}
+          handleRegister={handleRegister}
+          error={error}
+          loading={loading}
+        />
+      )}
 
-  if (page === 'menu') {
-    return (
-      <Menu
-        user={user}
-        handleLogout={handleLogout}
-        loadLevels={loadLevels}
-        loadLeaderboard={loadLeaderboard}
-        error={error}
-      />
-    );
-  }
+      {page === 'menu' && (
+        <Menu
+          user={user}
+          handleLogout={handleLogout}
+          loadLevels={loadLevels}
+          loadLeaderboard={loadLeaderboard}
+          error={error}
+        />
+      )}
 
-  if (page === 'levels') {
-    return (
-      <Levels
-        levels={levels}
-        startLevel={startLevel}
-        loading={loading}
-        error={error}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'levels' && (
+        <Levels
+          levels={levels}
+          startLevel={startLevel}
+          loading={loading}
+          error={error}
+          setPage={setPage}
+        />
+      )}
 
-  if (page === 'game' && !showReview) {
-    return (
-      <Game
-        grid={grid}
-        userAnswers={userAnswers}
-        setUserAnswers={setUserAnswers}        // ✅ tambahkan ini
-        selectedCell={selectedCell}
-        setSelectedCell={setSelectedCell}      // ✅ tambahkan ini
-        direction={direction}
-        setDirection={setDirection}
-        currentLevel={currentLevel}
-        hintsUsed={hintsUsed}
-        error={error}
-        gridRefs={gridRefs}
-        handleKeyDown={handleKeyDown}
-        handleCellClick={handleCellClick}
-        useHint={useHint}
-        submitGame={submitGame}
-        questions={questions}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'game' && !showReview && (
+        <Game
+          grid={grid}
+          userAnswers={userAnswers}
+          setUserAnswers={setUserAnswers}
+          selectedCell={selectedCell}
+          setSelectedCell={setSelectedCell}
+          direction={direction}
+          setDirection={setDirection}
+          currentLevel={currentLevel}
+          hintsUsed={hintsUsed}
+          error={error}
+          gridRefs={gridRefs}
+          handleKeyDown={handleKeyDown}
+          handleCellClick={handleCellClick}
+          useHint={useHint}
+          submitGame={submitGame}
+          questions={questions}
+          setPage={setPage}
+        />
+      )}
 
-  if (page === 'game' && showReview) {
-    return (
-      <Review
-        questions={questions}
-        userAnswers={userAnswers}
-        startTime={startTime}
-        endTime={endTime}
-        currentLevel={currentLevel}
-        setPage={setPage}
-        startLevel={startLevel}
-      />
-    );
-  }
+      {page === 'game' && showReview && (
+        <Review
+          questions={questions}
+          userAnswers={userAnswers}
+          startTime={startTime}
+          endTime={endTime}
+          currentLevel={currentLevel}
+          setPage={setPage}
+          startLevel={startLevel}
+        />
+      )}
 
-  if (page === 'leaderboard') {
-    return (
-      <Leaderboard
-        leaderboard={leaderboard}
-        loading={loading}
-        error={error}
-        setPage={setPage}
-      />
-    );
-  }
+      {page === 'leaderboard' && (
+        <Leaderboard
+          leaderboard={leaderboard}
+          loading={loading}
+          error={error}
+          setPage={setPage}
+        />
+      )}
 
-  return null;
+      {/* Floating Music Toggle */}
+      {user && (
+        <button
+          onClick={() => setIsMuted(!isMuted)}
+          className="fixed bottom-6 right-6 p-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-full shadow-lg hover:bg-white/30 transition-all z-50 text-white"
+          title={isMuted ? "Unmute Musik" : "Mute Musik"}
+        >
+          {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+        </button>
+      )}
+    </>
+  );
 };
 
 export default CrosswordGame;

@@ -26,24 +26,37 @@ const Leaderboard = ({ leaderboard, loading, error, setPage }) => {
             <div className="text-center text-gray-500 py-12">Belum ada data.</div>
           ) : (
             <div className="space-y-3">
-              {leaderboard.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  className={`flex items-center gap-4 p-4 rounded-lg ${
-                    idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white' :
-                    idx === 1 ? 'bg-gray-200' :
-                    idx === 2 ? 'bg-orange-200' :
-                    'bg-gray-100'
-                  }`}
-                >
-                  <div className="text-2xl font-bold w-12 text-center">{idx + 1}</div>
-                  <div className="flex-1 font-bold">{entry.username}</div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold">{entry.total_correct}</div>
-                    <div className="text-sm text-gray-600">Jawaban Benar</div>
+              {leaderboard.map((entry, idx) => {
+                const formatTime = (seconds) => {
+                  const m = Math.floor(seconds / 60);
+                  const s = seconds % 60;
+                  return `${m}:${s.toString().padStart(2, '0')}`;
+                };
+
+                return (
+                  <div
+                    key={entry.id}
+                    className={`flex items-center gap-4 p-4 rounded-lg ${idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white' :
+                        idx === 1 ? 'bg-gray-200' :
+                          idx === 2 ? 'bg-orange-200' :
+                            'bg-gray-100'
+                      }`}
+                  >
+                    <div className="text-2xl font-bold w-12 text-center">{idx + 1}</div>
+                    <div className="flex-1 font-bold">{entry.username}</div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-xl font-bold">{entry.total_correct}</div>
+                        <div className="text-xs opacity-70">Benar</div>
+                      </div>
+                      <div className="text-right border-l pl-6 border-gray-300">
+                        <div className="text-xl font-bold">{formatTime(entry.total_duration)}</div>
+                        <div className="text-xs opacity-70">Waktu</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
