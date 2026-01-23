@@ -40,3 +40,32 @@
 .read-the-docs {
   color: #888;
 }
+
+/* TTS Animations */
+@keyframes cell-scale-up {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.animate-cell-success {
+  animation: cell-scale-up 0.4s ease-out;
+}
+
+@keyframes sparkle-fade {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.sparkle {
+  position: absolute;
+  pointer-events: none;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #fff, 0 0 20px #fff;
+  z-index: 20;
+  animation: sparkle-fade 0.8s ease-in-out forwards;
+}
